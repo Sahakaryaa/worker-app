@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_colors.dart';
 import '../models/job.dart';
 import 'primary_button.dart';
+import 'glass_card.dart';
 
-/// Job Offer Card with animated 30-second countdown indicator per 03-worker-app-flutter.md §5.
+/// Job Offer Card with animated 30-second countdown indicator per 03-worker-app-flutter.md §5 & 08-flutter-immersive-ui-skill.md §2.1.
 class JobOfferCard extends StatelessWidget {
   final Job job;
   final int secondsRemaining;
@@ -23,22 +26,14 @@ class JobOfferCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = (secondsRemaining / 30.0).clamp(0.0, 1.0);
 
-    return Container(
+    return GlassCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: job.isEmergency ? AppColors.orange : AppColors.teal.withValues(alpha: 0.3),
-          width: job.isEmergency ? 2 : 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
+      borderRadius: 26,
+      border: Border.all(
+        color: job.isEmergency
+            ? AppColors.orange
+            : AppColors.teal.withValues(alpha: 0.4),
+        width: job.isEmergency ? 2.5 : 1.5,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -56,7 +51,7 @@ class JobOfferCard extends StatelessWidget {
                       color: job.isEmergency
                           ? AppColors.orange.withValues(alpha: 0.15)
                           : AppColors.teal.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(
                       job.isEmergency
@@ -101,11 +96,11 @@ class JobOfferCard extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-                    width: 46,
-                    height: 46,
+                    width: 48,
+                    height: 48,
                     child: CircularProgressIndicator(
                       value: progress,
-                      strokeWidth: 3.5,
+                      strokeWidth: 4.0,
                       backgroundColor: Colors.grey.shade200,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         secondsRemaining <= 10
@@ -233,7 +228,10 @@ class JobOfferCard extends StatelessWidget {
                   label: 'Decline',
                   isOutlined: true,
                   textColor: AppColors.error,
-                  onPressed: onDecline,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    onDecline();
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -243,13 +241,16 @@ class JobOfferCard extends StatelessWidget {
                   label: 'Accept Job (${secondsRemaining}s)',
                   icon: Icons.check_circle_rounded,
                   backgroundColor: AppColors.orange,
-                  onPressed: onAccept,
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    onAccept();
+                  },
                 ),
               ),
             ],
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 300.ms).scale(begin: const Offset(0.92, 0.92), curve: Curves.easeOut);
   }
 }

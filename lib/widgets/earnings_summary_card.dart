@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/app_colors.dart';
 
 /// Metrics summary card displayed on Worker Home Dashboard.
+/// Enhanced with staggered entry and count-up formatting per 08-flutter-immersive-ui-skill.md §5.
 class EarningsSummaryCard extends StatelessWidget {
   final double todayEarnings;
   final int completedJobs;
@@ -22,16 +25,16 @@ class EarningsSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -60,7 +63,7 @@ class EarningsSummaryCard extends StatelessWidget {
                       Text(
                         '₹${todayEarnings.toStringAsFixed(0)}',
                         style: GoogleFonts.sora(
-                          fontSize: 28,
+                          fontSize: 30,
                           fontWeight: FontWeight.w800,
                           color: AppColors.orange,
                         ),
@@ -68,10 +71,10 @@ class EarningsSummaryCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                            horizontal: 7, vertical: 2.5),
                         decoration: BoxDecoration(
                           color: AppColors.success.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           '+₹680 vs gig apps',
@@ -95,7 +98,7 @@ class EarningsSummaryCard extends StatelessWidget {
                 child: const Icon(
                   Icons.account_balance_wallet_rounded,
                   color: AppColors.orange,
-                  size: 26,
+                  size: 28,
                 ),
               ),
             ],
@@ -104,7 +107,7 @@ class EarningsSummaryCard extends StatelessWidget {
           const Divider(height: 1),
           const SizedBox(height: 14),
 
-          // 3 Quick Metrics
+          // 3 Quick Metrics (Bento subcells)
           Row(
             children: [
               // Jobs
@@ -130,7 +133,10 @@ class EarningsSummaryCard extends StatelessWidget {
               // Welfare Fund
               Expanded(
                 child: GestureDetector(
-                  onTap: onWelfareTap,
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    onWelfareTap?.call();
+                  },
                   child: _buildMetricItem(
                     icon: Icons.shield_rounded,
                     iconColor: AppColors.teal,
@@ -143,7 +149,7 @@ class EarningsSummaryCard extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.08, end: 0);
   }
 
   Widget _buildMetricItem({

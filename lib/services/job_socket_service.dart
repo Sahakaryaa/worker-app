@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../models/job.dart';
 
 final jobSocketServiceProvider = Provider<JobSocketService>((ref) {
@@ -11,7 +11,7 @@ final jobSocketServiceProvider = Provider<JobSocketService>((ref) {
 
 /// Socket.IO service to receive real-time incoming job offers from the FastAPI server.
 class JobSocketService {
-  IO.Socket? _socket;
+  io.Socket? _socket;
   final StreamController<Job> _jobOfferController =
       StreamController<Job>.broadcast();
 
@@ -22,9 +22,9 @@ class JobSocketService {
     if (_socket != null && _socket!.connected) return;
 
     try {
-      _socket = IO.io(
+      _socket = io.io(
         'http://localhost:8000',
-        IO.OptionBuilder()
+        io.OptionBuilder()
             .setTransports(['websocket'])
             .disableAutoConnect()
             .setQuery({'worker_id': workerId, 'role': 'worker'})
