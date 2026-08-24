@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'theme/app_colors.dart';
 import 'screens/home/home_dashboard_screen.dart';
 import 'screens/active_job/active_job_screen.dart';

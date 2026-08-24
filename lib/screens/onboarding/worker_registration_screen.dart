@@ -38,7 +38,6 @@ class _WorkerRegistrationScreenState
     'gardener',
   ];
   final Set<String> _selectedSkills = {'electrician', 'plumber'};
-  bool _isDocUploaded = true;
 
   @override
   void dispose() {

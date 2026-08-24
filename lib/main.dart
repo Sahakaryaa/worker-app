@@ -39,7 +39,6 @@ class SahaKaryaWorkerApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'SahaKarya Partner (सहकार्य साथी)',
       debugShowCheckedModeBanner: false,
-      useInheritedMediaQuery: enablePreview,
       locale: effectiveLocale,
       builder: effectiveBuilder,
       scrollBehavior: const AppScrollBehavior(),
