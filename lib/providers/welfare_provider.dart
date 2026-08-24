@@ -89,4 +89,21 @@ class WelfareNotifier extends StateNotifier<WelfareState> {
 
     return true;
   }
+
+  void recordContribution(double amount, String description) {
+    final newTx = WelfareTransaction(
+      id: 'wt_${DateTime.now().millisecondsSinceEpoch}',
+      workerId: 'w_demo_ramesh',
+      type: WelfareTransactionType.contribution,
+      amount: amount,
+      status: WelfareClaimStatus.approved,
+      createdAt: DateTime.now(),
+      description: description,
+    );
+    state = state.copyWith(
+      currentBalance: state.currentBalance + amount,
+      totalContributed: state.totalContributed + amount,
+      transactions: [newTx, ...state.transactions],
+    );
+  }
 }

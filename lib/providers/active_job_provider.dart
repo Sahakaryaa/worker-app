@@ -3,6 +3,8 @@ import '../models/job.dart';
 import '../services/api_client.dart';
 import 'earnings_provider.dart';
 
+import 'welfare_provider.dart';
+
 final activeJobProvider =
     StateNotifierProvider<ActiveJobNotifier, Job?>((ref) {
   final api = ref.watch(apiClientProvider);
@@ -39,6 +41,10 @@ class ActiveJobNotifier extends StateNotifier<Job?> {
     final completedJob = state!.copyWith(status: JobStatus.completed);
     await _api.updateJobStatus(completedJob.bookingId, 'completed');
     _ref.read(earningsProvider.notifier).recordCompletedJob(completedJob);
+    _ref.read(welfareProvider.notifier).recordContribution(
+          completedJob.welfareContribution,
+          '1% Social Security Allocation for #${completedJob.bookingId}',
+        );
     state = null;
   }
 
