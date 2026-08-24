@@ -152,17 +152,29 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
                     initialZoom: 15.0,
                   ),
                   children: [
+                    // Real Google Maps Roadmap Tile Layer
                     TileLayer(
                       urlTemplate:
-                          'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                          'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+                      subdomains: const ['mt0', 'mt1', 'mt2', 'mt3'],
                       userAgentPackageName: 'com.sahakarya.worker_app',
+                      maxZoom: 20,
                     ),
                     PolylineLayer(
                       polylines: [
                         Polyline(
                           points: routePoints,
+                          color: const Color(0xFF9A3412),
+                          strokeWidth: 6.0,
+                          strokeCap: StrokeCap.round,
+                          strokeJoin: StrokeJoin.round,
+                        ),
+                        Polyline(
+                          points: routePoints,
                           color: AppColors.orange,
-                          strokeWidth: 4.5,
+                          strokeWidth: 4.0,
+                          strokeCap: StrokeCap.round,
+                          strokeJoin: StrokeJoin.round,
                         ),
                       ],
                     ),

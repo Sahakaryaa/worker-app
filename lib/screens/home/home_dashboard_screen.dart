@@ -152,7 +152,7 @@ class HomeDashboardScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: GestureDetector(
-                  onTap: () => context.push('/active-job'),
+                  onTap: () => context.go('/active-job'),
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -216,7 +216,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                 completedJobs: earningsState.completedJobsToday,
                 ratingAvg: worker?.ratingAvg ?? 4.85,
                 welfareBalance: welfareState.currentBalance,
-                onWelfareTap: () => context.push('/welfare'),
+                onWelfareTap: () => context.go('/welfare'),
               ),
             ),
           ),
@@ -312,7 +312,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => context.push('/earnings'),
+                    onPressed: () => context.go('/earnings'),
                     child: Text(
                       'View All',
                       style: GoogleFonts.inter(
@@ -327,81 +327,121 @@ class HomeDashboardScreen extends ConsumerWidget {
             ),
           ),
 
-          // Job list items
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final job = earningsState.jobHistory[index % earningsState.jobHistory.length];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Row(
+          // Job list items with empty state fallback
+          if (earningsState.jobHistory.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Center(
+                    child: Column(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppColors.orange.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.handyman_rounded, color: AppColors.orange, size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                job.customerName,
-                                style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700),
-                              ),
-                              Text(
-                                '${job.serviceType[0].toUpperCase() + job.serviceType.substring(1)} • ${job.customerAddress.split(',').first}',
-                                style: GoogleFonts.inter(fontSize: 12, color: AppColors.inkLight),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                        const Icon(Icons.assignment_outlined,
+                            size: 36, color: AppColors.inkMuted),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No jobs completed yet today',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.inkLight,
                           ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹${job.price.toStringAsFixed(0)}',
-                              style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.teal),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Completed',
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.success,
-                                ),
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 2),
+                        Text(
+                          'Toggle online status to start receiving dispatches',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppColors.inkMuted,
+                          ),
                         ),
                       ],
                     ),
-                  );
-                },
-                childCount: earningsState.jobHistory.take(3).length,
+                  ),
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final job = earningsState.jobHistory[index];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.orange.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.handyman_rounded, color: AppColors.orange, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  job.customerName,
+                                  style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700),
+                                ),
+                                Text(
+                                  '${job.serviceType[0].toUpperCase() + job.serviceType.substring(1)} • ${job.customerAddress.split(',').first}',
+                                  style: GoogleFonts.inter(fontSize: 12, color: AppColors.inkLight),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '₹${job.price.toStringAsFixed(0)}',
+                                style: GoogleFonts.sora(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.teal),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'Completed',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  childCount: earningsState.jobHistory.length.clamp(0, 3),
+                ),
               ),
             ),
-          ),
 
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],

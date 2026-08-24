@@ -6,6 +6,24 @@ This document tracks all changes, additions, modifications, and removals perform
 
 ## 📅 Run History & Iteration Logs
 
+### [Run 4] — 2026-08-24: Fix Dashboard Blank Screen & Google Maps Roadmap Integration
+
+#### 🎯 Objectives
+Resolve blank screen on returning to home dashboard and upgrade navigation map to real Google Maps roadmap tiles.
+
+#### ✏️ Modified
+- **`lib/screens/home/home_dashboard_screen.dart`**:
+  - Fixed empty job history rendering crash (`IntegerDivisionByZeroException`) with dedicated empty state placeholder widget.
+  - Replaced rogue `context.push` calls with proper shell branch `context.go` navigation to maintain synchronized bottom navigation state.
+- **`lib/screens/active_job/active_job_screen.dart`**:
+  - Replaced Carto tiles with real Google Maps Roadmap tile layer (`https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}` with subdomains `['mt0', 'mt1', 'mt2', 'mt3']`).
+  - Added double-stroke Google Maps styled routing polyline (dark terracotta base stroke with vivid orange top stroke).
+
+#### 🔍 Verification & Lint Status
+- `dart analyze`: **0 errors, 0 warnings, 0 issues**.
+
+---
+
 ### [Run 3] — 2026-08-24: Immersive UI/UX Refinements (Design Skill v2.0)
 
 #### 🎯 Objectives
