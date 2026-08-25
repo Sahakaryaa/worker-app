@@ -113,7 +113,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      await _api.register(name, phoneDigits, password);
+      await _api.register(
+        name,
+        phoneDigits,
+        password,
+        skills: skills,
+        lat: ServiceRegion.defaultCenterLat,
+        lng: ServiceRegion.defaultCenterLng,
+      );
       var profile = await _resolveProfile(
         fallbackName: name,
         fallbackPhone: phoneDigits,
@@ -167,7 +174,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void _connectSocket(String workerId) {
     try {
-      _socket.connect(workerId);
+      // Realtime dispatch requires the JWT handshake (server rejects
+      // unauthenticated sockets); demo sessions have no token, so skip.
+      _api.getToken().then((token) {
+        if (token == null || token.isEmpty) return;
+        _socket.connect(workerId, token: token);
+      }).catchError((_) {/* realtime is best-effort */});
     } catch (_) {/* realtime is best-effort */}
   }
 

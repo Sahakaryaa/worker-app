@@ -69,6 +69,9 @@ class ApiClient {
     await _storage.delete(key: 'auth_token');
   }
 
+  /// Public read for services that need the JWT (e.g. Socket.IO handshake).
+  Future<String?> getToken() => _readToken();
+
   // ---------------------------------------------------------------- Auth
 
   /// POST /auth/login {phone, password} -> TokenResponse {access_token, user}
@@ -83,11 +86,23 @@ class ApiClient {
         : Map<String, dynamic>.from(data['user'] as Map);
   }
 
-  /// POST /auth/register {name, phone, password} -> TokenResponse
+  /// POST /auth/register {name, phone, password, role:'worker', skills, lat, lng}
+  /// -> TokenResponse. Sends role:'worker' + skills so the backend creates a
+  /// Worker document (a bare register would silently create a customer account).
   Future<Map<String, dynamic>?> register(
-      String name, String phone, String password) async {
-    final res = await _dio.post('/auth/register',
-        data: {'name': name, 'phone': phone, 'password': password});
+      String name, String phone, String password,
+      {List<String> skills = const [],
+      double? lat,
+      double? lng}) async {
+    final res = await _dio.post('/auth/register', data: {
+      'name': name,
+      'phone': phone,
+      'password': password,
+      'role': 'worker',
+      if (skills.isNotEmpty) 'skills': skills,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+    });
     final data = Map<String, dynamic>.from(res.data as Map);
     await saveToken(data['access_token'].toString());
     return data['user'] == null
@@ -103,11 +118,22 @@ class ApiClient {
     return WorkerProfile.fromJson(Map<String, dynamic>.from(response.data));
   }
 
-  /// PATCH /workers/location {lat, lng} -> 204 (flat keys per contract).
+  /// PATCH /workers/me/location {lat, lng} — server route (contract doc says
+  /// /workers/location but the backend mounts /workers/me/location).
   Future<void> updateLocation(double lat, double lng) async {
     await _dio.patch(
-      '/workers/location',
+      '/workers/me/location',
       data: {'lat': lat, 'lng': lng},
+    );
+  }
+
+  /// PATCH /workers/me/availability {online: bool} — required so dispatch
+  /// ($geoNear availability=='online') actually targets this worker.
+  /// Throws on failure so callers can decide how to surface it.
+  Future<void> setAvailability(bool online) async {
+    await _dio.patch(
+      '/workers/me/availability',
+      data: {'online': online},
     );
   }
 

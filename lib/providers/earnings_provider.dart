@@ -60,29 +60,31 @@ class EarningsNotifier extends StateNotifier<EarningsState> {
     state = state.copyWith(isLoading: true);
     try {
       final jobs = await _api.getJobHistory();
-      final today = DateTime.now();
-      final todays =
-          jobs.where((j) => _sameDay(j.createdAt, today)).toList();
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      // Rolling 7-day window to mirror the backend /workers/me/earnings.
+      final weekStart = today.subtract(const Duration(days: 6));
       double todaySum = 0;
-      for (final j in todays) {
+      double weekSum = 0;
+      int completedToday = 0;
+      for (final j in jobs) {
+        final created = DateTime(
+            j.createdAt.year, j.createdAt.month, j.createdAt.day);
+        if (created.isBefore(weekStart)) continue;
         // Worker take-home = price minus the single 5% welfare contribution
         // (backend deducts at completion).
-        todaySum += j.price - j.welfareContribution;
-      }
-      double weekSum = todaySum;
-      final weekStart = today.subtract(Duration(days: today.weekday - 1));
-      for (final j in jobs) {
-        if (j.createdAt.isBefore(weekStart) && !_sameDay(j.createdAt, today)) {
-          continue;
+        final takeHome = j.price - j.welfareContribution;
+        weekSum += takeHome;
+        if (_sameDay(j.createdAt, now)) {
+          todaySum += takeHome;
+          completedToday += 1;
         }
-        if (_sameDay(j.createdAt, today)) continue;
-        weekSum += j.price - j.welfareContribution;
       }
       state = state.copyWith(
         jobHistory: jobs,
         todayTotal: todaySum,
         weekTotal: weekSum,
-        completedJobsToday: todays.length,
+        completedJobsToday: completedToday,
         isLoading: false,
       );
     } catch (_) {

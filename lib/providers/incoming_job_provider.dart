@@ -66,13 +66,23 @@ class IncomingJobNotifier extends StateNotifier<JobOfferState> {
     _socketSub = _socket.jobOffers.listen(receiveOffer);
   }
 
-  /// Auto-decline ONLY when the countdown hits zero.
+  /// Auto-decline ONLY when the countdown hits zero. The initial budget is
+  /// the server's `timeout_seconds` when present so the UI can never count
+  /// past the point where another worker could claim the booking.
   void receiveOffer(Job job) {
+    final serverWindow = job.timeoutSeconds ?? kOfferCountdownSeconds;
+    var seconds = serverWindow <= 0 ? kOfferCountdownSeconds : serverWindow;
+    if (job.expiresAt != null) {
+      final untilExpiry = job.expiresAt!.difference(DateTime.now()).inSeconds;
+      if (untilExpiry > 0 && untilExpiry < seconds) {
+        seconds = untilExpiry;
+      }
+    }
     state = JobOfferState(
       currentOffer: job,
-      secondsRemaining: kOfferCountdownSeconds,
+      secondsRemaining: seconds,
     );
-    _startCountdown(from: kOfferCountdownSeconds);
+    _startCountdown(from: seconds);
   }
 
   void triggerDemoOffer({bool isEmergency = false}) {

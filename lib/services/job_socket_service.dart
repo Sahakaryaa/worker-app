@@ -22,6 +22,7 @@ final jobSocketServiceProvider = Provider<JobSocketService>((ref) {
 class JobSocketService {
   io.Socket? _socket;
   String? _workerId;
+  String? _token;
   Timer? _retryTimer;
   int _retryAttempt = 0;
   bool _disposed = false;
@@ -39,10 +40,16 @@ class JobSocketService {
   bool isConnected = false;
 
   /// Idempotent connect. Re-calling with the same worker id is a no-op while
-  /// connected; calling after [disconnect] reconnects.
-  void connect(String workerId) {
+  /// connected; calling after [disconnect] reconnects. The JWT travels in the
+  /// Socket.IO handshake `auth` payload — the server refuses connections
+  /// without a valid token.
+  void connect(String workerId, {required String token}) {
     if (_disposed) return;
+    if (_shouldStayConnected && _workerId == workerId && _token == token && _socket != null) {
+      return;
+    }
     _workerId = workerId;
+    _token = token;
     _shouldStayConnected = true;
     _retryAttempt = 0;
     _openSocket();
@@ -60,6 +67,7 @@ class JobSocketService {
         kApiBaseUrl,
         io.OptionBuilder()
             .setTransports(['websocket'])
+            .setAuth({'token': _token})
             .disableAutoConnect()
             .build(),
       );
@@ -113,6 +121,7 @@ class JobSocketService {
 
   void disconnect() {
     _shouldStayConnected = false;
+    _token = null;
     _retryTimer?.cancel();
     try {
       _socket?.disconnect();

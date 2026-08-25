@@ -223,8 +223,15 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
                     options: MapOptions(
                       initialCenter: _workerPos,
                       initialZoom: 14.5,
-                      onMapEvent: (_) =>
-                          setState(() => _followingRoute = false),
+                      onMapEvent: (event) {
+                        // Ignore map events caused by our own programmatic
+                        // camera flights, otherwise follow-mode disables
+                        // itself the instant it enables.
+                        if (_flyer.isAnimating) return;
+                        if (_followingRoute) {
+                          setState(() => _followingRoute = false);
+                        }
+                      },
                     ),
                     children: [
                       const CartoTiles(dark: true), // dark_all allowed in dark heroes

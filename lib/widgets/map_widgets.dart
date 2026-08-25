@@ -325,6 +325,10 @@ class CameraFlyer {
 
   CameraFlyer(this.mapController, this.vsync);
 
+  /// True while a programmatic camera animation is in flight — lets screens
+  /// distinguish our own mapController.move() events from genuine user pans.
+  bool get isAnimating => _ctrl != null && _ctrl!.isAnimating;
+
   void moveTo(LatLng target, {double? zoom, Duration duration = const Duration(milliseconds: 650)}) {
     _start(target, zoom, duration);
   }

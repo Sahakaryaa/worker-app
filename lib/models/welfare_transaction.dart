@@ -92,7 +92,10 @@ class WelfareSnapshot {
     return WelfareSnapshot(
       workerId: json['worker_id']?.toString() ?? '',
       balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
-      totalContributed: (json['total_contributed'] as num?)?.toDouble() ?? 0.0,
+      // Backend returns total_contributions; older contract docs said total_contributed.
+      totalContributed: (json['total_contributed'] as num?)?.toDouble() ??
+          (json['total_contributions'] as num?)?.toDouble() ??
+          0.0,
       transactions: txs,
     );
   }

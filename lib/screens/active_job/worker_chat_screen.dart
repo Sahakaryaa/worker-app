@@ -64,44 +64,50 @@ class _WorkerChatScreenState extends ConsumerState<WorkerChatScreen> {
 
   void _connect() {
     try {
-      _socket = io.io(
-        kApiBaseUrl,
-        io.OptionBuilder()
-            .setTransports(['websocket'])
-            .setPath('/socket.io')
-            .enableReconnection()
-            .setReconnectionDelay(1500)
-            .build(),
-      );
-      _socket!.onConnect((_) {
+      // The server refuses unauthenticated sockets — grab the JWT first.
+      final tokenFuture = ref.read(apiClientProvider).getToken();
+      tokenFuture.then((token) {
         if (!mounted) return;
-        setState(() => _connected = true);
-        _socket!.emit('join_booking', {'booking_id': widget.bookingId});
-      });
-      _socket!.onDisconnect((_) {
-        if (mounted) setState(() => _connected = false);
-      });
-      _socket!.onConnectError((_) {
-        if (mounted) setState(() => _connected = false);
-      });
-      _socket!.on('chat_message', (data) {
-        if (data is! Map || !mounted) return;
-        final id = data['booking_id']?.toString();
-        if (id != null && id != widget.bookingId) return;
-        final text =
-            (data['message'] ?? data['text'] ?? '').toString().trim();
-        if (text.isEmpty) return;
-        final role = data['sender_role']?.toString() ?? 'customer';
-        setState(() {
-          _customerTyping = false;
-          _messages.add(_WChatMsg(
-            text: text,
-            isMine: role == 'worker',
-            time: DateTime.tryParse(data['ts']?.toString() ?? '') ??
-                DateTime.now(),
-          ));
+        _socket = io.io(
+          kApiBaseUrl,
+          io.OptionBuilder()
+              .setTransports(['websocket'])
+              .setPath('/socket.io')
+              .setAuth({'token': token})
+              .enableReconnection()
+              .setReconnectionDelay(1500)
+              .build(),
+        );
+        _socket!.onConnect((_) {
+          if (!mounted) return;
+          setState(() => _connected = true);
+          _socket!.emit('join_booking', {'booking_id': widget.bookingId});
         });
-        _jumpToEnd();
+        _socket!.onDisconnect((_) {
+          if (mounted) setState(() => _connected = false);
+        });
+        _socket!.onConnectError((_) {
+          if (mounted) setState(() => _connected = false);
+        });
+        _socket!.on('chat_message', (data) {
+          if (data is! Map || !mounted) return;
+          final id = data['booking_id']?.toString();
+          if (id != null && id != widget.bookingId) return;
+          final text =
+              (data['message'] ?? data['text'] ?? '').toString().trim();
+          if (text.isEmpty) return;
+          final role = data['sender_role']?.toString() ?? 'customer';
+          setState(() {
+            _customerTyping = false;
+            _messages.add(_WChatMsg(
+              text: text,
+              isMine: role == 'worker',
+              time: DateTime.tryParse(data['ts']?.toString() ?? '') ??
+                  DateTime.now(),
+            ));
+          });
+          _jumpToEnd();
+        });
       });
     } catch (_) {
       if (mounted) setState(() => _connected = false);

@@ -88,6 +88,15 @@ class WorkerProfile {
         (json['longitude'] as num?)?.toDouble() ??
         ServiceRegion.defaultCenterLng;
 
+    // The backend WorkerResponse sends availability/rating_avg/total_ratings/
+    // certification_status; older contract docs used is_online/rating/
+    // total_jobs/certification. Accept BOTH shapes.
+    final isOnline = json['is_online'] as bool? ??
+        (json['availability']?.toString().toLowerCase() == 'online');
+    final certification = json['certification']?.toString() ??
+        json['certification_status']?.toString() ??
+        'pending';
+
     return WorkerProfile(
       id: json['_id']?.toString() ??
           json['id']?.toString() ??
@@ -100,12 +109,16 @@ class WorkerProfile {
               .toList() ??
           const [],
       serviceType: json['service_type']?.toString() ?? '',
-      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
-      totalJobs: (json['total_jobs'] as num?)?.toInt() ?? 0,
+      rating: (json['rating'] as num?)?.toDouble() ??
+          (json['rating_avg'] as num?)?.toDouble() ??
+          0.0,
+      totalJobs: (json['total_jobs'] as num?)?.toInt() ??
+          (json['total_ratings'] as num?)?.toInt() ??
+          0,
       latitude: lat,
       longitude: lng,
-      isOnline: json['is_online'] as bool? ?? false,
-      certification: json['certification']?.toString() ?? 'pending',
+      isOnline: isOnline,
+      certification: certification,
       federationId: json['federation_id']?.toString(),
     );
   }

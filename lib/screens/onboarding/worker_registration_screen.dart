@@ -263,7 +263,7 @@ class _WorkerRegistrationScreenState
           maxLength: 13,
           onChanged: (_) => setState(() {}),
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d+]'))],
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'\d'))],
           decoration: _deco(
             hint: 'e.g. 98765 43210',
             icon: Icons.phone_rounded,

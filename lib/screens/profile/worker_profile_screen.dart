@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/availability_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatting.dart';
 import '../../widgets/app_button.dart';
@@ -22,6 +23,7 @@ class WorkerProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
+    final isOnline = ref.watch(availabilityProvider);
     final worker = auth.profile;
 
     return Scaffold(
@@ -48,7 +50,7 @@ class WorkerProfileScreen extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                AvatarBadge(name: worker?.name ?? '', online: true, radius: 34),
+                AvatarBadge(name: worker?.name ?? '', online: isOnline, radius: 34),
                 const SizedBox(height: 14),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

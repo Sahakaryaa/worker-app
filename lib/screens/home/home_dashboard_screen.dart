@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/job.dart';
 import '../../providers/active_job_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/availability_provider.dart';
 import '../../providers/earnings_provider.dart';
 import '../../providers/incoming_job_provider.dart';
 import '../../providers/welfare_provider.dart';
@@ -29,6 +30,7 @@ class HomeDashboardScreen extends ConsumerWidget {
     final earnings = ref.watch(earningsProvider);
     final welfare = ref.watch(welfareProvider);
     final activeJobState = ref.watch(activeJobProvider);
+    final isOnline = ref.watch(availabilityProvider);
     final worker = auth.profile;
     final activeJob = activeJobState.job;
 
@@ -65,7 +67,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            AvatarBadge(name: worker?.name ?? '', online: true, radius: 24),
+                            AvatarBadge(name: worker?.name ?? '', online: isOnline, radius: 24),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -369,6 +371,16 @@ class EarningsHeroCard extends StatelessWidget {
     this.isLoading = false,
   });
 
+  /// Chart ceiling = max daily amount + 20% headroom (min 1 to avoid 0..0).
+  double _sparklineMaxY(List<Map<String, dynamic>> data) {
+    var maxVal = 0.0;
+    for (final e in data) {
+      final amount = (e['amount'] as num?)?.toDouble() ?? 0;
+      if (amount > maxVal) maxVal = amount;
+    }
+    return (maxVal * 1.2).clamp(1.0, double.infinity);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -405,14 +417,16 @@ class EarningsHeroCard extends StatelessWidget {
               SizedBox(
                 width: 110,
                 height: 44,
-                child: sparklineData.isEmpty
-                    ? const SizedBox.shrink()
-                    : LineChart(
-                        LineChartData(
-                          minX: 0,
-                          maxX: 6,
-                          minY: 0,
-                          maxY: 2600,
+                 child: sparklineData.isEmpty
+                     ? const SizedBox.shrink()
+                     : LineChart(
+                         LineChartData(
+                           minX: 0,
+                           maxX: 6,
+                           minY: 0,
+                           // Scale to the data (with headroom) instead of a
+                           // fixed cap that clips high-earning days.
+                           maxY: _sparklineMaxY(sparklineData),
                           gridData: const FlGridData(show: false),
                           titlesData: const FlTitlesData(show: false),
                           borderData: FlBorderData(show: false),
