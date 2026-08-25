@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../config/service_region.dart';
 import '../models/worker_profile.dart';
 import '../services/api_client.dart';
 import '../services/job_socket_service.dart';
@@ -154,8 +155,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         name: fallbackName,
         phone: fallbackPhone,
         skills: fallbackSkills,
-        latitude: 28.61,
-        longitude: 77.21,
+        latitude: ServiceRegion.defaultCenterLat,
+        longitude: ServiceRegion.defaultCenterLng,
       );
     }
   }

@@ -1,5 +1,6 @@
 import 'package:latlong2/latlong.dart';
 
+import '../config/service_region.dart';
 import '../utils/formatting.dart';
 
 /// Worker profile model mapped to `WorkerResponse` per API_CONTRACT.md:
@@ -24,7 +25,7 @@ class WorkerProfile {
   final double todayEarnings;
 
   static const String defaultFederationName =
-      'Delhi Central Labour Cooperative Federation';
+      ServiceRegion.federationName;
 
   const WorkerProfile({
     required this.id,
@@ -82,10 +83,10 @@ class WorkerProfile {
   factory WorkerProfile.fromJson(Map<String, dynamic> json) {
     final lat = (json['lat'] as num?)?.toDouble() ??
         (json['latitude'] as num?)?.toDouble() ??
-        28.6304;
+        ServiceRegion.defaultCenterLat;
     final lng = (json['lng'] as num?)?.toDouble() ??
         (json['longitude'] as num?)?.toDouble() ??
-        77.2177;
+        ServiceRegion.defaultCenterLng;
 
     return WorkerProfile(
       id: json['_id']?.toString() ??

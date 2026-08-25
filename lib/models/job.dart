@@ -1,4 +1,5 @@
 import 'package:latlong2/latlong.dart';
+import '../config/service_region.dart';
 
 /// Booking status enum per API_CONTRACT.md (exact strings):
 /// pending | accepted | declined | en_route | arrived | started | completed | cancelled
@@ -137,13 +138,14 @@ class Job {
   }
 
   factory Job.fromJson(Map<String, dynamic> json) {
-    // Coordinates are ALWAYS flat lat / lng per contract.
+    // Coordinates are ALWAYS flat lat / lng per contract; the service-region
+    // centre is the last-resort fallback (Godavari belt, not a metro city).
     final lat = (json['lat'] as num?)?.toDouble() ??
         (json['latitude'] as num?)?.toDouble() ??
-        28.6304;
+        ServiceRegion.defaultCenterLat;
     final lng = (json['lng'] as num?)?.toDouble() ??
         (json['longitude'] as num?)?.toDouble() ??
-        77.2177;
+        ServiceRegion.defaultCenterLng;
 
     final id = json['_id']?.toString() ??
         json['id']?.toString() ??

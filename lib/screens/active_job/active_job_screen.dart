@@ -9,12 +9,14 @@ import 'package:latlong2/latlong.dart';
 
 import '../../models/job.dart';
 import '../../providers/active_job_provider.dart';
+import '../../config/service_region.dart';
 import '../../services/location_stream_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatting.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_snack_bar.dart';
 import '../../widgets/empty_state.dart';
+import 'worker_chat_screen.dart';
 import '../../widgets/map_widgets.dart';
 
 /// Active job execution screen — dark embedded map, animated status timeline
@@ -30,7 +32,9 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
     with TickerProviderStateMixin {
   final MapController _mapController = MapController();
   late final CameraFlyer _flyer;
-  LatLng _workerPos = const LatLng(28.61, 77.21);
+  // Initial position: service-region centre until the live location service
+  // provides the worker's real coordinates (never a hardcoded metro city).
+  LatLng _workerPos = ServiceRegion.defaultCenter;
   bool _followingRoute = false;
 
   @override
@@ -403,6 +407,27 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
                             AppSnackBar.show(context,
                                 'Calling ${job.customerPhone.isEmpty ? "customer" : job.customerPhone}…',
                                 type: SnackType.info);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filled(
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                AppColors.indigo.withValues(alpha: 0.1),
+                            foregroundColor: AppColors.indigo,
+                          ),
+                          icon: const Icon(Icons.chat_bubble_rounded, size: 20),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) => WorkerChatScreen(
+                                bookingId: job.bookingId,
+                                customerName: job.customerName.isEmpty
+                                    ? 'Customer'
+                                    : job.customerName,
+                                serviceType: job.serviceType,
+                              ),
+                            ));
                           },
                         ),
                       ],

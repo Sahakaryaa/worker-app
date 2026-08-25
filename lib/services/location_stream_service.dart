@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import '../config/service_region.dart';
 import 'api_client.dart';
 
 final locationStreamServiceProvider = Provider<LocationStreamService>((ref) {
@@ -12,12 +13,13 @@ final locationStreamServiceProvider = Provider<LocationStreamService>((ref) {
 });
 
 /// Streams worker GPS coordinates to the backend periodically while online.
-/// Chain: live GPS -> last known -> cached default (Delhi NCR 28.61, 77.21).
+/// Chain: live GPS -> last known -> service-region default (Anaparthi centre).
 class LocationStreamService {
   final ApiClient _api;
   Timer? _locationTimer;
 
-  static const LatLng fallbackLocation = LatLng(28.61, 77.21);
+  /// Last-resort fallback — the Godavari service-region centre.
+  static const LatLng fallbackLocation = ServiceRegion.defaultCenter;
   LatLng _currentLocation = fallbackLocation;
 
   LocationStreamService(this._api);
