@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/job.dart';
 import '../services/api_client.dart';
 import '../services/job_socket_service.dart';
@@ -18,82 +20,124 @@ class JobOfferState {
   final int secondsRemaining;
   final bool isCountingDown;
 
+  /// Last action error, consumed + cleared by the UI (snackbar).
+  final String? lastError;
+  final int errorStamp;
+
   const JobOfferState({
     this.currentOffer,
-    this.secondsRemaining = 30,
+    this.secondsRemaining = kOfferCountdownSeconds,
     this.isCountingDown = false,
+    this.lastError,
+    this.errorStamp = 0,
   });
 
   JobOfferState copyWith({
     Job? currentOffer,
+    bool clearOffer = false,
     int? secondsRemaining,
     bool? isCountingDown,
-    bool clearOffer = false,
+    String? lastError,
+    int? errorStamp,
+    bool clearError = false,
   }) {
     return JobOfferState(
       currentOffer: clearOffer ? null : (currentOffer ?? this.currentOffer),
       secondsRemaining: secondsRemaining ?? this.secondsRemaining,
       isCountingDown: isCountingDown ?? this.isCountingDown,
+      lastError: clearError ? null : (lastError ?? this.lastError),
+      errorStamp: errorStamp ?? this.errorStamp,
     );
   }
 }
+
+const int kOfferCountdownSeconds = 60;
 
 class IncomingJobNotifier extends StateNotifier<JobOfferState> {
   final JobSocketService _socket;
   final ApiClient _api;
   final Ref _ref;
   Timer? _countdownTimer;
-  StreamSubscription? _socketSub;
+  StreamSubscription<Job>? _socketSub;
 
   IncomingJobNotifier(this._socket, this._api, this._ref)
       : super(const JobOfferState()) {
-    _socketSub = _socket.jobOffers.listen((job) {
-      receiveOffer(job);
-    });
+    // Single app-wide listener — offers flow regardless of which tab is open.
+    _socketSub = _socket.jobOffers.listen(receiveOffer);
   }
 
+  /// Auto-decline ONLY when the countdown hits zero.
   void receiveOffer(Job job) {
-    _countdownTimer?.cancel();
     state = JobOfferState(
       currentOffer: job,
-      secondsRemaining: 30,
-      isCountingDown: true,
+      secondsRemaining: kOfferCountdownSeconds,
     );
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (state.secondsRemaining > 1) {
-        state = state.copyWith(secondsRemaining: state.secondsRemaining - 1);
-      } else {
-        declineCurrentOffer();
-      }
-    });
+    _startCountdown(from: kOfferCountdownSeconds);
   }
 
   void triggerDemoOffer({bool isEmergency = false}) {
-    final demoJob = MockDataService.getDemoIncomingJob(isEmergency: isEmergency);
-    receiveOffer(demoJob);
+    receiveOffer(MockDataService.getDemoIncomingJob(isEmergency: isEmergency));
   }
 
   Future<void> acceptCurrentOffer() async {
     final job = state.currentOffer;
     if (job == null) return;
-
     _countdownTimer?.cancel();
-    state = state.copyWith(clearOffer: true, isCountingDown: false);
 
-    await _api.acceptJob(job.bookingId);
+    final ok = await _api.acceptJob(job.bookingId);
+    if (!ok) {
+      // Surface failure; do NOT flip any state to accepted.
+      // Resume the countdown so the worker can retry (auto-decline at zero).
+      state = state.copyWith(
+        lastError: 'Could not accept — check your connection.',
+        errorStamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      _startCountdown(from: state.secondsRemaining);
+      return;
+    }
+
+    state = state.copyWith(clearOffer: true, isCountingDown: false);
     _ref.read(activeJobProvider.notifier).setActiveJob(
-          job.copyWith(status: JobStatus.matched),
+          job.copyWith(status: JobStatus.accepted),
         );
   }
 
-  Future<void> declineCurrentOffer() async {
+  void _startCountdown({required int from}) {
+    _countdownTimer?.cancel();
+    var remaining = from <= 0 ? kOfferCountdownSeconds : from;
+    state = state.copyWith(secondsRemaining: remaining, isCountingDown: true);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!state.isCountingDown) {
+        timer.cancel();
+        return;
+      }
+      if (remaining > 1) {
+        remaining -= 1;
+        state = state.copyWith(secondsRemaining: remaining);
+      } else {
+        timer.cancel();
+        declineCurrentOffer(autoDeclined: true);
+      }
+    });
+  }
+
+  Future<void> declineCurrentOffer({bool autoDeclined = false}) async {
     final job = state.currentOffer;
+    if (job == null) return;
     _countdownTimer?.cancel();
     state = state.copyWith(clearOffer: true, isCountingDown: false);
-    if (job != null) {
-      await _api.declineJob(job.bookingId);
+
+    final ok = await _api.declineJob(job.bookingId);
+    if (!ok && !autoDeclined) {
+      state = state.copyWith(
+        lastError: 'Could not reach server to decline the job.',
+        errorStamp: DateTime.now().millisecondsSinceEpoch,
+      );
     }
+  }
+
+  void consumeError() {
+    state = state.copyWith(clearError: true);
   }
 
   @override

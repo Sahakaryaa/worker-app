@@ -1,11 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-/// Glassmorphism 2.0 card implementing selective depth with BackdropFilter.
-/// Follows 08-flutter-immersive-ui-skill.md guidelines:
-/// - Static blur sigma (sigmaX: 16, sigmaY: 16)
-/// - High contrast borders and subtle translucent fill
-/// - Accessible over maps, gradients, and dark accents
+import '../theme/app_colors.dart';
+
+/// Frosted glass card — white .72 overlay + BackdropFilter blur 14
+/// (use sparingly, over imagery/gradients per DESIGN_SPEC.md).
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -21,7 +20,7 @@ class GlassCard extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.borderRadius = 20,
     this.tintColor,
-    this.opacity = 0.85,
+    this.opacity = 0.72,
     this.border,
     this.onTap,
   });
@@ -33,24 +32,15 @@ class GlassCard extends StatelessWidget {
     final content = ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
         child: Container(
           padding: padding,
           decoration: BoxDecoration(
             color: effectiveTint.withValues(alpha: opacity),
             borderRadius: BorderRadius.circular(borderRadius),
             border: border ??
-                Border.all(
-                  color: Colors.white.withValues(alpha: 0.35),
-                  width: 1.2,
-                ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
+                Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.2),
+            boxShadow: AppColors.softShadow,
           ),
           child: child,
         ),
@@ -58,12 +48,46 @@ class GlassCard extends StatelessWidget {
     );
 
     if (onTap != null) {
-      return GestureDetector(
-        onTap: onTap,
-        child: content,
-      );
+      return GestureDetector(onTap: onTap, child: content);
     }
-
     return content;
+  }
+}
+
+/// Dark variant used on gradient heroes.
+class DarkGlassCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double borderRadius;
+  final VoidCallback? onTap;
+
+  const DarkGlassCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.borderRadius = 20,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(borderRadius),
+            border:
+                Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: onTap == null
+              ? child
+              : GestureDetector(onTap: onTap, child: child),
+        ),
+      ),
+    );
   }
 }

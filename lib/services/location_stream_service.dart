@@ -11,11 +11,14 @@ final locationStreamServiceProvider = Provider<LocationStreamService>((ref) {
   return service;
 });
 
-/// Streams worker GPS coordinates to the backend periodically when online.
+/// Streams worker GPS coordinates to the backend periodically while online.
+/// Chain: live GPS -> last known -> cached default (Delhi NCR 28.61, 77.21).
 class LocationStreamService {
   final ApiClient _api;
   Timer? _locationTimer;
-  LatLng _currentLocation = const LatLng(28.6304, 77.2177);
+
+  static const LatLng fallbackLocation = LatLng(28.61, 77.21);
+  LatLng _currentLocation = fallbackLocation;
 
   LocationStreamService(this._api);
 
@@ -24,6 +27,8 @@ class LocationStreamService {
   void startStreaming() {
     _locationTimer?.cancel();
     _broadcastLocation();
+    // Throttled broadcast (2s minimum per spec; we use a relaxed 12s cadence
+    // for background dispatch updates).
     _locationTimer = Timer.periodic(const Duration(seconds: 12), (_) {
       _broadcastLocation();
     });
@@ -36,15 +41,28 @@ class LocationStreamService {
 
   Future<void> _broadcastLocation() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          timeLimit: Duration(seconds: 2),
-        ),
-      );
-      _currentLocation = LatLng(pos.latitude, pos.longitude);
+      LatLng? pos;
+      try {
+        final live = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            timeLimit: Duration(seconds: 3),
+          ),
+        );
+        pos = LatLng(live.latitude, live.longitude);
+      } catch (_) {
+        try {
+          final last = await Geolocator.getLastKnownPosition();
+          if (last != null) pos = LatLng(last.latitude, last.longitude);
+        } catch (_) {}
+      }
+      pos ??= _currentLocation == fallbackLocation ? null : _currentLocation;
+      if (pos == null) return; // stay on cached default; no spam
+
+      _currentLocation = pos;
+      // PATCH /workers/location {lat, lng} — flat keys per contract.
       await _api.updateLocation(pos.latitude, pos.longitude);
     } catch (_) {
-      // Keep baseline coordinates in demo
+      // Non-fatal: dispatch keeps working with last known location.
     }
   }
 }

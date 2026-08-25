@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../theme/app_colors.dart';
+
 import '../../providers/auth_provider.dart';
-import '../../widgets/primary_button.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/formatting.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_snack_bar.dart';
 import '../../widgets/cooperative_badge.dart';
 
-/// Multi-step Worker Onboarding & Federation Registration per 03-worker-app-flutter.md §5.
+/// Validated multi-step registration — POST /auth/register {name,phone,password}.
+/// No pre-filled identity; hint text only; Next disabled until step valid.
 class WorkerRegistrationScreen extends ConsumerStatefulWidget {
   const WorkerRegistrationScreen({super.key});
 
@@ -18,16 +24,18 @@ class WorkerRegistrationScreen extends ConsumerStatefulWidget {
 
 class _WorkerRegistrationScreenState
     extends ConsumerState<WorkerRegistrationScreen> {
-  int _currentStep = 0;
+  int _step = 0;
 
-  // Form controllers
-  final _phoneController = TextEditingController(text: '+91 98111 00001');
-  final _otpController = TextEditingController(text: '1234');
-  final _nameController = TextEditingController(text: 'Ramesh Kumar');
-  final _experienceController = TextEditingController(text: '8');
-  final _federationCodeController = TextEditingController(text: 'DEL-NCCT-2024');
+  final _phone = TextEditingController();
+  final _password = TextEditingController();
+  final _name = TextEditingController();
+  final _experience = TextEditingController();
+  final _federationCode = TextEditingController();
 
-  final List<String> _availableSkills = [
+  bool _obscure = true;
+  String? _phoneError;
+
+  static const List<String> _availableSkills = [
     'electrician',
     'plumber',
     'carpenter',
@@ -37,368 +45,416 @@ class _WorkerRegistrationScreenState
     'driver',
     'gardener',
   ];
-  final Set<String> _selectedSkills = {'electrician', 'plumber'};
+  final Set<String> _selectedSkills = {};
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _otpController.dispose();
-    _nameController.dispose();
-    _experienceController.dispose();
-    _federationCodeController.dispose();
+    for (final c in [_phone, _password, _name, _experience, _federationCode]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
-  void _nextStep() async {
-    if (_currentStep == 0) {
-      setState(() => _currentStep = 1);
-    } else if (_currentStep == 1) {
-      if (_nameController.text.isEmpty) return;
-      setState(() => _currentStep = 2);
-    } else if (_currentStep == 2) {
-      if (_selectedSkills.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please select at least one trade skill')),
-        );
-        return;
-      }
-      setState(() => _currentStep = 3);
-    } else if (_currentStep == 3) {
-      await ref.read(authProvider.notifier).registerWorker(
-            name: _nameController.text,
-            phone: _phoneController.text,
-            skills: _selectedSkills.toList(),
-            federationCode: _federationCodeController.text,
-          );
-      if (mounted) context.go('/home');
+  bool get _phoneValid => isValidPhone(_phone.text);
+
+  bool get _stepValid {
+    switch (_step) {
+      case 0:
+        return _phoneValid && _password.text.length >= 4;
+      case 1:
+        return _name.text.trim().length >= 2;
+      case 2:
+        return _selectedSkills.isNotEmpty;
+      default:
+        return true;
     }
+  }
+
+  String? get _stepHint {
+    switch (_step) {
+      case 0:
+        if (_phone.text.isEmpty) return null;
+        if (!_phoneValid) return 'Mobile number must be exactly 10 digits';
+        if (_password.text.length < 4) return 'Password needs at least 4 characters';
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _next() async {
+    if (!_stepValid) return;
+
+    if (_step == 3) {
+      final ok = await ref.read(authProvider.notifier).registerWorker(
+            name: _name.text.trim(),
+            phoneDigits: normalizePhone(_phone.text)!,
+            password: _password.text,
+            skills: _selectedSkills.toList(),
+          );
+      if (!mounted) return;
+      if (ok) {
+        context.go('/home');
+      } else {
+        AppSnackBar.show(
+          context,
+          ref.read(authProvider).error ?? 'Registration failed.',
+          type: SnackType.error,
+        );
+      }
+      return;
+    }
+    setState(() => _step += 1);
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
+    final auth = ref.watch(authProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        title: Text(
-          'SahaKarya Partner Onboarding',
-          style: GoogleFonts.sora(fontSize: 17, fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: AppColors.teal,
-        foregroundColor: Colors.white,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Step Progress Stepper
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              color: AppColors.surface,
-              child: Row(
-                children: List.generate(4, (index) {
-                  final isActive = index <= _currentStep;
-                  return Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isActive ? AppColors.orange : Colors.grey.shade300,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${index + 1}',
-                              style: GoogleFonts.inter(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (index < 3)
-                          Expanded(
-                            child: Container(
-                              height: 3,
-                              color: index < _currentStep
-                                  ? AppColors.orange
-                                  : Colors.grey.shade300,
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                }),
-              ),
-            ),
-
-            // Step Content Area
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
+        children: [
+          // Gradient header
+          Container(
+            decoration: const BoxDecoration(gradient: AppColors.goldGradient),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+                child: Row(
                   children: [
-                    if (_currentStep == 0) _buildPhoneStep(),
-                    if (_currentStep == 1) _buildPersonalDetailsStep(),
-                    if (_currentStep == 2) _buildSkillSelectionStep(),
-                    if (_currentStep == 3) _buildFederationVerificationStep(),
+                    IconButton(
+                      onPressed: () {
+                        if (_step > 0) {
+                          setState(() => _step -= 1);
+                        } else {
+                          context.pop();
+                        }
+                      },
+                      icon:
+                          const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Join the Cooperative',
+                        style: GoogleFonts.sora(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const CooperativeBadge(isCompact: true),
                   ],
                 ),
               ),
             ),
+          ),
 
-            // Bottom CTA bar
-            Container(
+          // Stepper progress
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+            child: Row(
+              children: List.generate(4, (i) {
+                final active = i <= _step;
+                return Expanded(
+                  child: Container(
+                    height: 5,
+                    margin: EdgeInsets.only(right: i == 3 ? 0 : 6),
+                    decoration: BoxDecoration(
+                      color: active
+                          ? AppColors.gold
+                          : AppColors.surfaceAlt,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+
+          Expanded(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -3),
-                  ),
-                ],
-              ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                key: ValueKey(_step), // re-run stagger animations per step
                 children: [
-                  if (_currentStep > 0) ...[
-                    Expanded(
-                      child: PrimaryButton(
-                        label: 'Back',
-                        isOutlined: true,
-                        onPressed: () => setState(() => _currentStep -= 1),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: PrimaryButton(
-                      label: _currentStep == 3
-                          ? 'Complete Registration'
-                          : 'Continue',
-                      isLoading: authState.isLoading,
-                      onPressed: _nextStep,
-                    ),
-                  ),
+                  if (_step == 0) _buildPhoneStep(),
+                  if (_step == 1) _buildNameStep(),
+                  if (_step == 2) _buildSkillStep(),
+                  if (_step == 3) _buildFederationStep(),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // Bottom CTA
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              border: Border(top: BorderSide(color: AppColors.border.withValues(alpha: 0.7))),
+            ),
+            child: SafeArea(
+              top: false,
+              child: AppButton(
+                label: _step == 3 ? 'Complete Registration' : 'Continue',
+                icon: _step == 3 ? Icons.check_circle_rounded : Icons.arrow_forward_rounded,
+                isLoading: auth.isLoading,
+                onPressed: _stepValid ? _next : null,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
+  Widget _title(String title, String subtitle) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: GoogleFonts.sora(
+                  fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+          const SizedBox(height: 6),
+          Text(subtitle,
+              style: GoogleFonts.inter(fontSize: 13.5, height: 1.5, color: AppColors.inkSoft)),
+          const SizedBox(height: 24),
+        ],
+      );
+
+  InputDecoration _deco({
+    required String hint,
+    required IconData icon,
+    String? errorText,
+    Widget? suffix,
+  }) =>
+      InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, size: 20, color: AppColors.goldDark),
+        suffixIcon: suffix,
+        errorText: errorText,
+        filled: true,
+        fillColor: AppColors.surface,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.gold, width: 1.6),
+        ),
+      );
+
   Widget _buildPhoneStep() {
+    final hint = _stepHint;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Join the Cooperative Federation',
-          style: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Enter your mobile number to receive an OTP verification code.',
-          style: GoogleFonts.inter(fontSize: 14, color: AppColors.inkLight),
-        ),
-        const SizedBox(height: 24),
+        _title('Create your account', 'Use your mobile number and set a password to join the federation network.'),
         TextField(
-          controller: _phoneController,
+          controller: _phone,
           keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            labelText: 'Mobile Number',
-            prefixIcon: const Icon(Icons.phone_rounded, color: AppColors.orange),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          maxLength: 13,
+          onChanged: (_) => setState(() {}),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d+]'))],
+          decoration: _deco(
+            hint: 'e.g. 98765 43210',
+            icon: Icons.phone_rounded,
+            errorText: _phoneError ?? ((hint != null && hint.contains('digits')) ? hint : null),
           ),
-        ),
+        ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.12, end: 0),
         const SizedBox(height: 16),
         TextField(
-          controller: _otpController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Enter OTP (Default: 1234)',
-            prefixIcon: const Icon(Icons.lock_clock_rounded, color: AppColors.orange),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+          controller: _password,
+          obscureText: _obscure,
+          onChanged: (_) => setState(() {}),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          decoration: _deco(
+            hint: 'Create a password (min 4 chars)',
+            icon: Icons.lock_outline_rounded,
+            suffix: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  size: 20, color: AppColors.inkFaint),
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
           ),
-        ),
+        ).animate(delay: 60.ms).fadeIn(duration: 350.ms).slideY(begin: 0.12, end: 0),
+        if (hint != null && !hint.contains('digits')) ...[
+          const SizedBox(height: 10),
+          Text(hint, style: GoogleFonts.inter(fontSize: 12, color: AppColors.warning)),
+        ],
+        const SizedBox(height: 16),
+        Row(children: [
+          const Icon(Icons.shield_moon_rounded, size: 15, color: AppColors.indigo),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text('Your number is verified by OTP at first dispatch.',
+                style: GoogleFonts.inter(fontSize: 12, color: AppColors.inkSoft)),
+          ),
+        ]),
       ],
     );
   }
 
-  Widget _buildPersonalDetailsStep() {
+  Widget _buildNameStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Personal & Contact Details',
-          style: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'These details will appear on your verified partner badge.',
-          style: GoogleFonts.inter(fontSize: 14, color: AppColors.inkLight),
-        ),
-        const SizedBox(height: 24),
+        _title('Your details', 'This appears on your verified partner badge shown to customers.'),
         TextField(
-          controller: _nameController,
-          decoration: InputDecoration(
-            labelText: 'Full Name',
-            prefixIcon: const Icon(Icons.person_rounded, color: AppColors.orange),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
+          controller: _name,
+          textCapitalization: TextCapitalization.words,
+          onChanged: (_) => setState(() {}),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          decoration: _deco(hint: 'Full name', icon: Icons.person_rounded),
+        ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.12, end: 0),
         const SizedBox(height: 16),
         TextField(
-          controller: _experienceController,
+          controller: _experience,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Years of Experience',
-            prefixIcon: const Icon(Icons.work_history_rounded, color: AppColors.orange),
+          maxLength: 2,
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          decoration: const InputDecoration(counterText: '').copyWith(
+            hintText: 'Years of experience (optional)',
+            prefixIcon: const Icon(Icons.work_history_rounded,
+                size: 20, color: AppColors.goldDark),
             filled: true,
             fillColor: AppColors.surface,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.gold, width: 1.6),
+            ),
           ),
-        ),
+        ).animate(delay: 60.ms).fadeIn(duration: 350.ms).slideY(begin: 0.12, end: 0),
       ],
     );
   }
 
-  Widget _buildSkillSelectionStep() {
+  Widget _buildSkillStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Select Your Trade Skills',
-          style: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Select the services you are certified to provide through the federation.',
-          style: GoogleFonts.inter(fontSize: 14, color: AppColors.inkLight),
-        ),
-        const SizedBox(height: 20),
+        _title('Trade skills', 'Pick every service you are certified to provide through the federation.'),
         Wrap(
           spacing: 10,
           runSpacing: 10,
           children: _availableSkills.map((skill) {
-            final isSelected = _selectedSkills.contains(skill);
+            final selected = _selectedSkills.contains(skill);
             return FilterChip(
-              label: Text(
-                skill[0].toUpperCase() + skill.substring(1),
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : AppColors.ink,
-                ),
+              label: Text(titleCase(skill)),
+              selected: selected,
+              onSelected: (_) => setState(() {
+                if (selected) {
+                  _selectedSkills.remove(skill);
+                } else {
+                  _selectedSkills.add(skill);
+                }
+              }),
+              labelStyle: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : AppColors.ink,
               ),
-              selected: isSelected,
-              selectedColor: AppColors.orange,
-              backgroundColor: AppColors.surface,
               checkmarkColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: isSelected ? AppColors.orange : AppColors.border,
-                ),
-              ),
-              onSelected: (selected) {
-                setState(() {
-                  if (selected) {
-                    _selectedSkills.add(skill);
-                  } else {
-                    _selectedSkills.remove(skill);
-                  }
-                });
-              },
+              selectedColor: AppColors.gold,
+              backgroundColor: AppColors.surface,
+              side: BorderSide(
+                  color: selected ? AppColors.gold : AppColors.border),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             );
           }).toList(),
-        ),
+        )
+            .animate()
+            .fadeIn(duration: 350.ms)
+            .slideY(begin: 0.12, end: 0),
       ],
     );
   }
 
-  Widget _buildFederationVerificationStep() {
+  Widget _buildFederationStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              'Federation Verification',
-              style: GoogleFonts.sora(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink),
-            ),
-            const SizedBox(width: 8),
-            const CooperativeBadge(isCompact: true),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Enter your Labour Cooperative Federation affiliation code and trade certificate.',
-          style: GoogleFonts.inter(fontSize: 14, color: AppColors.inkLight),
-        ),
-        const SizedBox(height: 20),
+        _title('Federation code', 'Enter your cooperative member code if you have one. You can also add this later.'),
         TextField(
-          controller: _federationCodeController,
-          decoration: InputDecoration(
-            labelText: 'Federation Member Code',
-            prefixIcon: const Icon(Icons.badge_rounded, color: AppColors.teal),
-            filled: true,
-            fillColor: AppColors.surface,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-        ),
+          controller: _federationCode,
+          textCapitalization: TextCapitalization.characters,
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+          decoration:
+              _deco(hint: 'e.g. DEL-NCCT-2024', icon: Icons.badge_rounded),
+        ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.12, end: 0),
         const SizedBox(height: 20),
-
-        // Document upload preview card
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.teal.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.teal.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.verified_user_rounded, color: AppColors.teal, size: 28),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'NCCT Electrician Certificate',
-                      style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      'Verified by Federation Board',
-                      style: GoogleFonts.inter(fontSize: 12, color: AppColors.success, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
-            ],
-          ),
-        ),
+        SoftInfoCard(
+          icon: Icons.workspace_premium_rounded,
+          title: 'Certification pending review',
+          body:
+              'The federation board verifies your trade certificate after signup. Status appears on your profile.',
+        ).animate(delay: 80.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0),
       ],
+    );
+  }
+}
+
+class SoftInfoCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const SoftInfoCard({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.indigo.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.indigo.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.indigo.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AppColors.indigo, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(body,
+                    style: GoogleFonts.inter(
+                        fontSize: 12, height: 1.45, color: AppColors.inkSoft)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

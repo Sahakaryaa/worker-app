@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../../theme/app_colors.dart';
-import '../../providers/active_job_provider.dart';
-import '../../models/job.dart';
-import '../../widgets/primary_button.dart';
-import '../../widgets/cooperative_badge.dart';
 
-/// Active Job Execution & Navigation Screen per 03-worker-app-flutter.md §5.
+import '../../models/job.dart';
+import '../../providers/active_job_provider.dart';
+import '../../services/location_stream_service.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/formatting.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_snack_bar.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/map_widgets.dart';
+
+/// Active job execution screen — dark embedded map, animated status timeline
+/// (accepted→en_route→arrived→started→completed) and stage-appropriate CTA.
 class ActiveJobScreen extends ConsumerStatefulWidget {
   const ActiveJobScreen({super.key});
 
@@ -19,514 +27,607 @@ class ActiveJobScreen extends ConsumerStatefulWidget {
 }
 
 class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final MapController _mapController = MapController();
-  late AnimationController _radarController;
-  late Animation<double> _radarAnimation;
-
-  final LatLng _workerPos = const LatLng(28.6304, 77.2177);
+  late final CameraFlyer _flyer;
+  LatLng _workerPos = const LatLng(28.61, 77.21);
+  bool _followingRoute = false;
 
   @override
   void initState() {
     super.initState();
-    _radarController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    )..repeat();
-
-    _radarAnimation = CurvedAnimation(
-      parent: _radarController,
-      curve: Curves.easeOut,
-    );
+    _flyer = CameraFlyer(_mapController, this);
   }
 
   @override
   void dispose() {
-    _radarController.dispose();
+    _flyer.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final activeJob = ref.watch(activeJobProvider);
-
-    if (activeJob == null) {
-      return Scaffold(
-        backgroundColor: AppColors.bg,
-        appBar: AppBar(
-          title: const Text('Active Job'),
-          backgroundColor: AppColors.teal,
-          foregroundColor: Colors.white,
-        ),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.check_circle_outline_rounded,
-                  size: 64, color: AppColors.teal),
-              const SizedBox(height: 16),
-              Text(
-                'No Active Job in Progress',
-                style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Go online on Home Dashboard to receive nearby job offers.',
-                style: GoogleFonts.inter(fontSize: 14, color: AppColors.inkLight),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () => context.go('/home'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.orange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text('Return to Dashboard'),
-              ),
-            ],
-          ),
-        ),
-      );
+  void _fitCamera(Job job, {bool force = false}) {
+    if (!_followingRoute || force) {
+      // Prefer the live/cached position from the location service.
+      final loc = ref.read(locationStreamServiceProvider).currentLocation;
+      setState(() => _workerPos = loc);
+      _flyer.fitCoordinates([_workerPos, job.customerLocation]);
+      setState(() => _followingRoute = true);
     }
+  }
 
-    final custPos = activeJob.customerLocation;
-    final routePoints = [
-      _workerPos,
-      LatLng((_workerPos.latitude + custPos.latitude) / 2 + 0.001,
-          (_workerPos.longitude + custPos.longitude) / 2 - 0.001),
-      custPos,
-    ];
+  Future<void> _onStageAction(Job job) async {
+    final notifier = ref.read(activeJobProvider.notifier);
+    bool ok;
+    switch (job.status) {
+      case JobStatus.accepted:
+        ok = await notifier.startEnRoute();
+        break;
+      case JobStatus.enRoute:
+        ok = await notifier.markArrived();
+        break;
+      case JobStatus.arrived:
+        ok = await notifier.startWork();
+        break;
+      case JobStatus.started:
+        ok = await notifier.completeJob();
+        break;
+      default:
+        return;
+    }
+    if (!mounted) return;
+    if (!ok) {
+      AppSnackBar.show(context,
+          ref.read(activeJobProvider).error ?? 'Action failed.',
+          type: SnackType.error);
+    } else if (job.status == JobStatus.started) {
+      _showCompletionCelebration(job);
+    }
+  }
 
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Active Job: ${activeJob.customerName}',
-              style: GoogleFonts.sora(fontSize: 17, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              'Booking #${activeJob.bookingId}',
-              style: GoogleFonts.inter(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.teal,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.my_location_rounded),
-            onPressed: () => _mapController.move(_workerPos, 15.0),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Job Status Stepper Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: AppColors.surface,
-            child: Row(
-              children: [
-                _buildStepPill('1. Dispatched', activeJob.status.index >= 1, activeJob.status == JobStatus.matched),
-                const SizedBox(width: 6),
-                _buildStepPill('2. Arrived', activeJob.status.index >= 2, activeJob.status == JobStatus.arrived),
-                const SizedBox(width: 6),
-                _buildStepPill('3. Working', activeJob.status.index >= 3, activeJob.status == JobStatus.inProgress),
-              ],
-            ),
-          ),
+  ({String label, IconData icon}) _ctaFor(JobStatus status) => switch (status) {
+        JobStatus.accepted => (label: 'Start En Route', icon: Icons.directions_rounded),
+        JobStatus.enRoute => (label: "I've Arrived", icon: Icons.location_on_rounded),
+        JobStatus.arrived => (label: 'Start Job', icon: Icons.play_arrow_rounded),
+        JobStatus.started => (label: 'Complete Job', icon: Icons.check_circle_rounded),
+        _ => (label: 'Update', icon: Icons.update_rounded),
+      };
 
-          // Live Route Map Viewport
-          Expanded(
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _workerPos,
-                    initialZoom: 15.0,
-                  ),
-                  children: [
-                    // Real Google Maps Roadmap Tile Layer
-                    TileLayer(
-                      urlTemplate:
-                          'https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-                      subdomains: const ['mt0', 'mt1', 'mt2', 'mt3'],
-                      userAgentPackageName: 'com.sahakarya.worker_app',
-                      maxZoom: 20,
-                    ),
-                    PolylineLayer(
-                      polylines: [
-                        Polyline(
-                          points: routePoints,
-                          color: const Color(0xFF9A3412),
-                          strokeWidth: 6.0,
-                          strokeCap: StrokeCap.round,
-                          strokeJoin: StrokeJoin.round,
-                        ),
-                        Polyline(
-                          points: routePoints,
-                          color: AppColors.orange,
-                          strokeWidth: 4.0,
-                          strokeCap: StrokeCap.round,
-                          strokeJoin: StrokeJoin.round,
-                        ),
-                      ],
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        // Worker Location Marker
-                        Marker(
-                          point: _workerPos,
-                          width: 50,
-                          height: 50,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: AppColors.orangeGradient,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.orange.withValues(alpha: 0.5),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                              border: Border.all(color: Colors.white, width: 2.5),
-                            ),
-                            child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 24),
-                          ),
-                        ),
-
-                        // Customer Destination Marker with Radar Pulse
-                        Marker(
-                          point: custPos,
-                          width: 70,
-                          height: 70,
-                          child: AnimatedBuilder(
-                            animation: _radarAnimation,
-                            builder: (context, child) {
-                              return Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Container(
-                                    width: 30 + (34 * _radarAnimation.value),
-                                    height: 30 + (34 * _radarAnimation.value),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppColors.teal.withValues(
-                                        alpha: (1.0 - _radarAnimation.value) * 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.teal,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.home_rounded, color: Colors.white, size: 20),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-
-                // Floating Telemetry Card
-                Positioned(
-                  top: 12,
-                  left: 14,
-                  right: 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.pin_drop_rounded, color: AppColors.orange, size: 22),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            activeJob.customerAddress,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.ink,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          activeJob.distanceFormatted,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.teal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom Action Controller Sheet
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+  void _showCompletionCelebration(Job job) {
+    HapticFeedback.heavyImpact();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 14,
-                  offset: const Offset(0, -4),
-                ),
-              ],
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: AppColors.softShadow,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Customer Profile & Payout Header
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AppColors.teal.withValues(alpha: 0.1),
-                      child: Text(
-                        activeJob.customerName.split(' ').map((e) => e[0]).take(2).join(),
-                        style: GoogleFonts.sora(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.teal,
-                        ),
-                      ),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration:
+                      const BoxDecoration(color: AppColors.success, shape: BoxShape.circle),
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
+                ).animate().scale(
+                      begin: const Offset(0.3, 0.3),
+                      curve: Curves.elasticOut,
+                      duration: 700.ms,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                activeJob.customerName,
-                                style: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w700),
-                              ),
-                              const SizedBox(width: 6),
-                              const CooperativeBadge(isCompact: true),
-                            ],
-                          ),
-                          Text(
-                            '${activeJob.serviceType.toUpperCase()} • Payout: ₹${activeJob.price.toStringAsFixed(0)}',
-                            style: GoogleFonts.inter(fontSize: 12, color: AppColors.inkLight, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Call customer action
-                    IconButton.filled(
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.teal.withValues(alpha: 0.12),
-                        foregroundColor: AppColors.teal,
-                      ),
-                      icon: const Icon(Icons.phone_in_talk_rounded),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Calling ${activeJob.customerName} (${activeJob.customerPhone})...'),
-                            backgroundColor: AppColors.teal,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                const SizedBox(height: 16),
+                Text(
+                  'Job Completed!',
+                  style: GoogleFonts.sora(fontSize: 19, fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 14),
-                const Divider(height: 1),
-                const SizedBox(height: 14),
-
-                // Lifecycle Stepper Actions
-                if (activeJob.status == JobStatus.matched)
-                  PrimaryButton(
-                    label: 'I Have Arrived at Location',
-                    icon: Icons.location_on_rounded,
-                    backgroundColor: AppColors.teal,
-                    onPressed: () async {
-                      await ref.read(activeJobProvider.notifier).markArrived();
-                    },
-                  )
-                else if (activeJob.status == JobStatus.arrived)
-                  PrimaryButton(
-                    label: 'Start Work (Inspect & Repair)',
-                    icon: Icons.play_arrow_rounded,
-                    backgroundColor: AppColors.orange,
-                    onPressed: () async {
-                      await ref.read(activeJobProvider.notifier).startWork();
-                    },
-                  )
-                else if (activeJob.status == JobStatus.inProgress)
-                  PrimaryButton(
-                    label: 'Complete Job & Collect ₹${activeJob.price.toStringAsFixed(0)}',
-                    icon: Icons.check_circle_rounded,
-                    backgroundColor: AppColors.success,
-                    onPressed: () async {
-                      await ref.read(activeJobProvider.notifier).completeJob();
-                      if (context.mounted) {
-                        _showCompletionCelebration(context, activeJob);
-                      }
-                    },
-                  ),
-
-                const SizedBox(height: 10),
-
-                // Secondary Actions: SOS Alert
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton.icon(
-                        icon: const Icon(Icons.shield_rounded, color: AppColors.error, size: 18),
-                        label: Text(
-                          '24/7 Federation Safety SOS',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.error,
-                          ),
-                        ),
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('SOS Alert dispatched to SahaKarya Safety Desk & Emergency Services!'),
-                              backgroundColor: AppColors.error,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 8),
+                Text(
+                  '₹${(job.price - job.welfareContribution).toStringAsFixed(0)} credited to your payout.\n₹${job.welfareContribution.toStringAsFixed(1)} (5%) added to your welfare fund.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      fontSize: 13, height: 1.5, color: AppColors.inkSoft),
+                ),
+                const SizedBox(height: 22),
+                AppButton(
+                  label: 'View Earnings',
+                  icon: Icons.account_balance_wallet_rounded,
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    context.go('/earnings');
+                  },
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    context.go('/home');
+                  },
+                  child: Text('Back to Dashboard',
+                      style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.inkSoft)),
                 ),
               ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(activeJobProvider);
+    final job = state.job;
+
+    // Surface provider errors once.
+    if (state.error != null && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeJobProvider.notifier).consumeError();
+      });
+    }
+
+    if (job == null) {
+      return Scaffold(
+        backgroundColor: AppColors.bg,
+        appBar: AppBar(
+          title: Text('Active Job',
+              style: GoogleFonts.sora(fontWeight: FontWeight.w700)),
+          backgroundColor: AppColors.bg,
+          foregroundColor: AppColors.ink,
+          elevation: 0,
+        ),
+        body: EmptyState(
+          icon: Icons.assignment_turned_in_outlined,
+          title: 'No active job',
+          subtitle:
+              'You have no job in progress right now. Go online on the dashboard to receive dispatch offers in real time.',
+          ctaLabel: 'Go to Dashboard',
+          onCta: () => context.go('/home'),
+        ),
+      );
+    }
+
+    final custPos = job.customerLocation;
+    final routePoints = [
+      _workerPos,
+      LatLng((_workerPos.latitude + custPos.latitude) / 2 + 0.0012,
+          (_workerPos.longitude + custPos.longitude) / 2 - 0.0009),
+      custPos,
+    ];
+
+    return Scaffold(
+      backgroundColor: AppColors.night1,
+      body: Column(
+        children: [
+          // ---------------- Dark map hero ----------------
+          Expanded(
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: _workerPos,
+                      initialZoom: 14.5,
+                      onMapEvent: (_) =>
+                          setState(() => _followingRoute = false),
+                    ),
+                    children: [
+                      const CartoTiles(dark: true), // dark_all allowed in dark heroes
+                      AnimatedDashPolyline(points: routePoints),
+                      MarkerLayer(markers: [
+                        Marker(
+                          point: _workerPos,
+                          width: 84,
+                          height: 84,
+                          child: const HaloPulseMarkerChild(),
+                        ),
+                        Marker(
+                          point: custPos,
+                          width: 64,
+                          height: 64,
+                          alignment: Alignment.center,
+                          child: DestinationMarkerChild(
+                            icon: Icons.home_rounded,
+                            color: AppColors.indigo,
+                          ).animate().scale(
+                                begin: const Offset(0.2, 0.2),
+                                curve: Curves.elasticOut,
+                                duration: 650.ms,
+                              ),
+                        ),
+                      ]),
+                      const CartoAttribution(),
+                    ],
+                  ),
+                ),
+
+                // Top telemetry bar
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 8,
+                  left: 16,
+                  right: 16,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface.withValues(alpha: 0.96),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.25),
+                                blurRadius: 18,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.pin_drop_rounded,
+                                  color: AppColors.goldDark, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  job.customerAddress.isEmpty
+                                      ? 'Customer location'
+                                      : job.customerAddress,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              Text(job.distanceFormatted,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.goldDark)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Recenter FAB (crosshair) with follow indicator
+                Positioned(
+                  right: 16,
+                  bottom: 18,
+                  child: FloatingActionButton.small(
+                    heroTag: 'recenter_fab',
+                    backgroundColor: AppColors.surface,
+                    foregroundColor:
+                        _followingRoute ? AppColors.goldDark : AppColors.inkSoft,
+                    elevation: 4,
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _fitCamera(job, force: true);
+                    },
+                    child: AnimatedRotation(
+                      turns: _followingRoute ? 0 : 0.125,
+                      duration: const Duration(milliseconds: 250),
+                      child: const Icon(Icons.gps_fixed_rounded, size: 20),
+                    ),
+                  ),
+                ),
+
+                // Status pill over map
+                Positioned(
+                  left: 16,
+                  bottom: 18,
+                  child: StatusPillForMap(status: job.status),
+                ),
+              ],
+            ),
+          ),
+
+          // ---------------- Bottom control sheet ----------------
+          Container(
+            width: double.infinity,
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.52,
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Customer contact row
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 23,
+                          backgroundColor:
+                              AppColors.indigo.withValues(alpha: 0.1),
+                          child: Text(
+                            initialsOf(job.customerName),
+                            style: GoogleFonts.sora(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.indigo),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                job.customerName.isEmpty
+                                    ? 'Customer'
+                                    : job.customerName,
+                                style: GoogleFonts.sora(
+                                    fontSize: 15, fontWeight: FontWeight.w800),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${titleCase(job.serviceType.isEmpty ? 'service' : job.serviceType)} • ₹${job.price.toStringAsFixed(0)} payout',
+                                style: GoogleFonts.inter(
+                                    fontSize: 12, color: AppColors.inkSoft),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton.filled(
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                AppColors.indigo.withValues(alpha: 0.1),
+                            foregroundColor: AppColors.indigo,
+                          ),
+                          icon: const Icon(Icons.phone_in_talk_rounded, size: 20),
+                          onPressed: () {
+                            HapticFeedback.lightImpact();
+                            AppSnackBar.show(context,
+                                'Calling ${job.customerPhone.isEmpty ? "customer" : job.customerPhone}…',
+                                type: SnackType.info);
+                          },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Vertical animated timeline
+                    StatusTimeline(current: job.status),
+
+                    const SizedBox(height: 16),
+
+                    // Stage CTA
+                    AppButton(
+                      key: ValueKey(job.status.apiValue),
+                      label: _ctaFor(job.status).label,
+                      icon: _ctaFor(job.status).icon,
+                      isLoading: state.busy,
+                      onPressed: state.busy ? null : () => _onStageAction(job),
+                    ),
+                    const SizedBox(height: 6),
+
+                    // SOS row
+                    TextButton.icon(
+                      onPressed: () {
+                        HapticFeedback.heavyImpact();
+                        AppSnackBar.show(context,
+                            'SOS alert sent to the federation safety desk.',
+                            type: SnackType.error);
+                      },
+                      icon: const Icon(Icons.shield_rounded,
+                          color: AppColors.danger, size: 17),
+                      label: Text('Federation Safety SOS',
+                          style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.danger)),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildStepPill(String title, bool isCompleted, bool isCurrent) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: isCurrent
-              ? AppColors.orange.withValues(alpha: 0.15)
-              : isCompleted
-                  ? AppColors.teal.withValues(alpha: 0.1)
-                  : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isCurrent
-                ? AppColors.orange
-                : isCompleted
-                    ? AppColors.teal
-                    : Colors.grey.shade300,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: isCurrent
-                  ? AppColors.orange
-                  : isCompleted
-                      ? AppColors.teal
-                      : AppColors.inkMuted,
-            ),
-          ),
-        ),
+// ---------------------------------------------------------------- widgets
+
+class StatusPillForMap extends StatelessWidget {
+  final JobStatus status;
+  const StatusPillForMap({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      JobStatus.accepted => AppColors.indigo,
+      JobStatus.enRoute => AppColors.info,
+      JobStatus.arrived => AppColors.indigoDeep,
+      JobStatus.started => AppColors.goldDark,
+      _ => AppColors.success,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [color, color.withValues(alpha: .85)]),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 14)],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.route_rounded, size: 15, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(status.label.toUpperCase(),
+              style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: Colors.white)),
+        ],
       ),
     );
   }
+}
 
-  void _showCompletionCelebration(BuildContext context, Job job) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Job Successfully Completed!',
-                style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '₹${job.price.toStringAsFixed(0)} has been credited to your account.\n+₹${job.welfareContribution.toStringAsFixed(1)} added to your Federation Welfare Fund.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 13, color: AppColors.inkLight),
-              ),
-              const SizedBox(height: 20),
-              PrimaryButton(
-                label: 'View Earnings Breakdown',
-                icon: Icons.account_balance_wallet_rounded,
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  context.go('/earnings');
-                },
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  context.go('/home');
-                },
-                child: const Text('Back to Dashboard'),
-              ),
-            ],
+/// Vertical animated status timeline w/ current-stage glow.
+class StatusTimeline extends StatelessWidget {
+  final JobStatus current;
+
+  static const List<JobStatus> stages = [
+    JobStatus.accepted,
+    JobStatus.enRoute,
+    JobStatus.arrived,
+    JobStatus.started,
+    JobStatus.completed,
+  ];
+
+  const StatusTimeline({super.key, required this.current});
+
+  int get _currentIdx =>
+      stages.contains(current) ? stages.indexOf(current) : 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < stages.length; i++)
+          _StageRow(
+            status: stages[i],
+            isCurrent: i == _currentIdx,
+            isDone: i < _currentIdx,
+            isFirst: i == 0,
+            isLast: i == stages.length - 1,
           ),
-        );
-      },
+      ],
+    );
+  }
+}
+
+class _StageRow extends StatelessWidget {
+  final JobStatus status;
+  final bool isCurrent;
+  final bool isDone;
+  final bool isFirst;
+  final bool isLast;
+
+  const _StageRow({
+    required this.status,
+    required this.isCurrent,
+    required this.isDone,
+    required this.isFirst,
+    required this.isLast,
+  });
+
+  Color get _color => isCurrent
+      ? AppColors.gold
+      : isDone
+          ? AppColors.success
+          : AppColors.border;
+
+  IconData get _icon {
+    if (isDone) return Icons.check_rounded;
+    return switch (status) {
+      JobStatus.accepted => Icons.assignment_turned_in_rounded,
+      JobStatus.enRoute => Icons.directions_rounded,
+      JobStatus.arrived => Icons.location_on_rounded,
+      JobStatus.started => Icons.construction_rounded,
+      JobStatus.completed => Icons.flag_rounded,
+      _ => Icons.circle_outlined,
+    };
+  }
+
+  String get _label => switch (status) {
+        JobStatus.accepted => 'Job accepted',
+        JobStatus.enRoute => 'En route to customer',
+        JobStatus.arrived => 'Arrived at location',
+        JobStatus.started => 'Work started',
+        JobStatus.completed => 'Job completed',
+        _ => status.label,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 34,
+            child: Column(
+              children: [
+                if (!isFirst)
+                  Container(width: 3, height: 10, color: _color.withValues(alpha: 0.5)),
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: isCurrent ? AppColors.gold : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _color, width: 2),
+                    boxShadow: isCurrent
+                        ? [
+                            BoxShadow(
+                              color: AppColors.gold.withValues(alpha: 0.55),
+                              blurRadius: 14,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Icon(_icon, size: 14,
+                      color: isDone ? AppColors.success : (isCurrent ? Colors.white : AppColors.inkFaint)),
+                ).animate(target: isCurrent ? 1 : 0, autoPlay: false)
+                    .shimmer(duration: 1400.ms, color: Colors.white38),
+                if (!isLast)
+                  Container(width: 3, height: 10, color: _color.withValues(alpha: 0.5)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 300),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+                    color: isCurrent
+                        ? AppColors.ink
+                        : isDone
+                            ? AppColors.success
+                            : AppColors.inkFaint,
+                  ),
+                  child: Text(_label),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

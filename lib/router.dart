@@ -1,131 +1,128 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'theme/app_colors.dart';
-import 'screens/home/home_dashboard_screen.dart';
+
+import 'providers/auth_provider.dart';
 import 'screens/active_job/active_job_screen.dart';
+import 'screens/auth/login_screen.dart';
 import 'screens/earnings/earnings_screen.dart';
-import 'screens/welfare/welfare_fund_screen.dart';
-import 'screens/profile/worker_profile_screen.dart';
+import 'screens/home/home_dashboard_screen.dart';
 import 'screens/onboarding/worker_registration_screen.dart';
+import 'screens/profile/worker_profile_screen.dart';
+import 'screens/splash/splash_screen.dart';
+import 'screens/welfare/welfare_fund_screen.dart';
+import 'widgets/animated_bottom_nav.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
 
-final router = GoRouter(
-  navigatorKey: _rootNavigatorKey,
-  initialLocation: '/home',
-  routes: [
-    // Onboarding multi-step registration
-    GoRoute(
-      path: '/onboarding',
-      builder: (context, state) => const WorkerRegistrationScreen(),
-    ),
+final _authRefresh = ChangeNotifierProvider<_AuthRefresh>((ref) {
+  final notifier = _AuthRefresh();
+  ref.listen(authProvider, (_, __) => notifier.ping());
+  ref.onDispose(notifier.dispose);
+  return notifier;
+});
 
-    // Stateful Shell with Bottom Navigation Bar
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) {
-        return Scaffold(
-          body: navigationShell,
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
+class _AuthRefresh extends ChangeNotifier {
+  void ping() => notifyListeners();
+}
+
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    navigatorKey: _rootNavigatorKey,
+    initialLocation: '/',
+    refreshListenable: ref.watch(_authRefresh),
+    redirect: (context, state) {
+      final auth = ref.read(authProvider);
+      if (auth.isLoading && state.matchedLocation == '/') return null;
+
+      final location = state.matchedLocation;
+
+      if (!auth.isAuthenticated) {
+        // Splash handles its own wait; everything else funnels to login.
+        return location == '/' ? null : '/login';
+      }
+      if (location == '/' || location == '/login') return '/home';
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const WorkerRegistrationScreen(),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return Scaffold(
+            body: navigationShell,
+            extendBody: true,
+            bottomNavigationBar: AnimatedBottomNav(
+              currentIndex: navigationShell.currentIndex,
+              onTap: (i) => navigationShell.goBranch(
+                i,
+                initialLocation: i == navigationShell.currentIndex,
+              ),
+              items: const [
+                AnimatedNavItem(
+                    icon: Icons.home_outlined,
+                    activeIcon: Icons.home_rounded,
+                    label: 'Home'),
+                AnimatedNavItem(
+                    icon: Icons.navigation_outlined,
+                    activeIcon: Icons.navigation_rounded,
+                    label: 'Job'),
+                AnimatedNavItem(
+                    icon: Icons.payments_outlined,
+                    activeIcon: Icons.payments_rounded,
+                    label: 'Earnings'),
+                AnimatedNavItem(
+                    icon: Icons.volunteer_activism_outlined,
+                    activeIcon: Icons.volunteer_activism_rounded,
+                    label: 'Welfare'),
+                AnimatedNavItem(
+                    icon: Icons.person_outline_rounded,
+                    activeIcon: Icons.person_rounded,
+                    label: 'Profile'),
               ],
             ),
-            child: NavigationBar(
-              selectedIndex: navigationShell.currentIndex,
-              backgroundColor: AppColors.surface,
-              indicatorColor: AppColors.orange.withValues(alpha: 0.15),
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              onDestinationSelected: (index) {
-                navigationShell.goBranch(
-                  index,
-                  initialLocation: index == navigationShell.currentIndex,
-                );
-              },
-              destinations: [
-                NavigationDestination(
-                  icon: const Icon(Icons.home_outlined),
-                  selectedIcon:
-                      const Icon(Icons.home_rounded, color: AppColors.orange),
-                  label: 'Dashboard',
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.navigation_outlined),
-                  selectedIcon: const Icon(Icons.navigation_rounded,
-                      color: AppColors.orange),
-                  label: 'Active Job',
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  selectedIcon: const Icon(Icons.account_balance_wallet_rounded,
-                      color: AppColors.orange),
-                  label: 'Earnings',
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.shield_outlined),
-                  selectedIcon:
-                      const Icon(Icons.shield_rounded, color: AppColors.teal),
-                  label: 'Welfare',
-                ),
-                NavigationDestination(
-                  icon: const Icon(Icons.person_outline_rounded),
-                  selectedIcon:
-                      const Icon(Icons.person_rounded, color: AppColors.orange),
-                  label: 'Profile',
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-      branches: [
-        StatefulShellBranch(
-          routes: [
+          );
+        },
+        branches: [
+          StatefulShellBranch(routes: [
             GoRoute(
-              path: '/home',
-              builder: (context, state) => const HomeDashboardScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
+                path: '/home',
+                builder: (context, state) => const HomeDashboardScreen()),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(
-              path: '/active-job',
-              builder: (context, state) => const ActiveJobScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
+                path: '/active-job',
+                builder: (context, state) => const ActiveJobScreen()),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(
-              path: '/earnings',
-              builder: (context, state) => const EarningsScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
+                path: '/earnings',
+                builder: (context, state) => const EarningsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(
-              path: '/welfare',
-              builder: (context, state) => const WelfareFundScreen(),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
+                path: '/welfare',
+                builder: (context, state) => const WelfareFundScreen()),
+          ]),
+          StatefulShellBranch(routes: [
             GoRoute(
-              path: '/profile',
-              builder: (context, state) => const WorkerProfileScreen(),
-            ),
-          ],
-        ),
-      ],
-    ),
-  ],
-);
+                path: '/profile',
+                builder: (context, state) => const WorkerProfileScreen()),
+          ]),
+        ],
+      ),
+    ],
+  );
+});

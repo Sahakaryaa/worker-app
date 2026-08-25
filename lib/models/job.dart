@@ -1,32 +1,54 @@
 import 'package:latlong2/latlong.dart';
 
+/// Booking status enum per API_CONTRACT.md (exact strings):
+/// pending | accepted | declined | en_route | arrived | started | completed | cancelled
 enum JobStatus {
-  requested,
-  matched,
+  pending,
+  accepted,
+  declined,
+  enRoute,
   arrived,
-  inProgress,
+  started,
   completed,
   cancelled;
 
-  String get label {
-    switch (this) {
-      case JobStatus.requested:
-        return 'Offer Pending';
-      case JobStatus.matched:
-        return 'Dispatched';
-      case JobStatus.arrived:
-        return 'Arrived at Location';
-      case JobStatus.inProgress:
-        return 'Work in Progress';
-      case JobStatus.completed:
-        return 'Completed';
-      case JobStatus.cancelled:
-        return 'Cancelled';
-    }
-  }
+  static JobStatus fromApi(String? raw) => switch (raw) {
+        'pending' => JobStatus.pending,
+        'accepted' => JobStatus.accepted,
+        'declined' => JobStatus.declined,
+        'en_route' => JobStatus.enRoute,
+        'arrived' => JobStatus.arrived,
+        'started' => JobStatus.started,
+        'completed' => JobStatus.completed,
+        'cancelled' => JobStatus.cancelled,
+        _ => JobStatus.pending,
+      };
+
+  String get apiValue => switch (this) {
+        JobStatus.pending => 'pending',
+        JobStatus.accepted => 'accepted',
+        JobStatus.declined => 'declined',
+        JobStatus.enRoute => 'en_route',
+        JobStatus.arrived => 'arrived',
+        JobStatus.started => 'started',
+        JobStatus.completed => 'completed',
+        JobStatus.cancelled => 'cancelled',
+      };
+
+  String get label => switch (this) {
+        JobStatus.pending => 'Offer Pending',
+        JobStatus.accepted => 'Accepted',
+        JobStatus.declined => 'Declined',
+        JobStatus.enRoute => 'En Route',
+        JobStatus.arrived => 'Arrived',
+        JobStatus.started => 'Work Started',
+        JobStatus.completed => 'Completed',
+        JobStatus.cancelled => 'Cancelled',
+      };
 }
 
-/// Job offer and active booking model for SahaKarya Partner.
+/// Job offer + active booking model.
+/// Parses BOTH the Socket.IO `job_offer` payload and `BookingResponse`.
 class Job {
   final String id;
   final String bookingId;
@@ -37,38 +59,43 @@ class Job {
   final double customerLatitude;
   final double customerLongitude;
   final double price;
-  final double welfareContribution; // 1%
+
+  /// Contract money rule: exactly ONE figure anywhere = the 5% welfare
+  /// contribution deducted from worker payout at completion.
+  final double welfareContribution;
   final double distanceMeters;
   final bool isEmergency;
   final JobStatus status;
   final DateTime createdAt;
+  final DateTime? expiresAt;
   final String? serviceNotes;
 
   const Job({
     required this.id,
     required this.bookingId,
     required this.serviceType,
-    required this.customerName,
-    required this.customerPhone,
-    required this.customerAddress,
+    this.customerName = '',
+    this.customerPhone = '',
+    this.customerAddress = '',
     required this.customerLatitude,
     required this.customerLongitude,
     required this.price,
-    this.welfareContribution = 4.5,
-    required this.distanceMeters,
+    double? welfareContribution,
+    this.distanceMeters = 0,
     this.isEmergency = false,
-    this.status = JobStatus.matched,
+    this.status = JobStatus.pending,
     required this.createdAt,
+    this.expiresAt,
     this.serviceNotes,
-  });
+  }) : welfareContribution = welfareContribution ?? price * 0.05;
 
   LatLng get customerLocation => LatLng(customerLatitude, customerLongitude);
 
   String get distanceFormatted {
     if (distanceMeters >= 1000) {
-      return '${(distanceMeters / 1000).toStringAsFixed(1)} km away';
+      return '${(distanceMeters / 1000).toStringAsFixed(1)} km';
     }
-    return '${distanceMeters.round()} m away';
+    return '${distanceMeters.round()} m';
   }
 
   Job copyWith({
@@ -86,6 +113,7 @@ class Job {
     bool? isEmergency,
     JobStatus? status,
     DateTime? createdAt,
+    DateTime? expiresAt,
     String? serviceNotes,
   }) {
     return Job(
@@ -103,53 +131,55 @@ class Job {
       isEmergency: isEmergency ?? this.isEmergency,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      expiresAt: expiresAt ?? this.expiresAt,
       serviceNotes: serviceNotes ?? this.serviceNotes,
     );
   }
 
   factory Job.fromJson(Map<String, dynamic> json) {
-    double lat = 28.6328;
-    double lng = 77.2197;
-    if (json['location'] != null && json['location']['coordinates'] != null) {
-      final coords = json['location']['coordinates'] as List;
-      lng = (coords[0] as num).toDouble();
-      lat = (coords[1] as num).toDouble();
-    } else {
-      lat = (json['latitude'] as num?)?.toDouble() ?? 28.6328;
-      lng = (json['longitude'] as num?)?.toDouble() ?? 77.2197;
-    }
+    // Coordinates are ALWAYS flat lat / lng per contract.
+    final lat = (json['lat'] as num?)?.toDouble() ??
+        (json['latitude'] as num?)?.toDouble() ??
+        28.6304;
+    final lng = (json['lng'] as num?)?.toDouble() ??
+        (json['longitude'] as num?)?.toDouble() ??
+        77.2177;
 
-    final statusStr = json['status'] as String? ?? 'matched';
-    final parsedStatus = switch (statusStr) {
-      'requested' => JobStatus.requested,
-      'matched' => JobStatus.matched,
-      'arrived' => JobStatus.arrived,
-      'in_progress' => JobStatus.inProgress,
-      'completed' => JobStatus.completed,
-      'cancelled' => JobStatus.cancelled,
-      _ => JobStatus.matched,
-    };
+    final id = json['_id']?.toString() ??
+        json['id']?.toString() ??
+        'job_${DateTime.now().millisecondsSinceEpoch}';
+    final bookingId = json['booking_id']?.toString() ?? id;
 
-    final priceVal = (json['price'] as num?)?.toDouble() ?? 450.0;
+    final distanceKm = (json['distance_km'] as num?)?.toDouble();
+    final distanceM = (json['distance_m'] as num?)?.toDouble();
+
+    final priceVal = (json['price'] as num?)?.toDouble() ?? 0.0;
 
     return Job(
-      id: json['_id'] as String? ?? json['id'] as String? ?? 'job_${DateTime.now().millisecondsSinceEpoch}',
-      bookingId: json['booking_id'] as String? ?? json['id'] as String? ?? 'b_${DateTime.now().millisecondsSinceEpoch}',
-      serviceType: json['service_type'] as String? ?? 'electrician',
-      customerName: json['customer_name'] as String? ?? 'Ananya Sharma',
-      customerPhone: json['customer_phone'] as String? ?? '+91 98765 43210',
-      customerAddress: json['customer_address'] as String? ?? 'Flat 402, Block C, Connaught Place, New Delhi',
+      id: id,
+      bookingId: bookingId,
+      serviceType: json['service_type']?.toString() ?? '',
+      customerName: json['customer_name']?.toString() ?? '',
+      customerPhone: json['customer_phone']?.toString() ?? '',
+      customerAddress:
+          json['address']?.toString() ?? json['customer_address']?.toString() ?? '',
       customerLatitude: lat,
       customerLongitude: lng,
       price: priceVal,
-      welfareContribution: (priceVal * 0.01),
-      distanceMeters: (json['distance_m'] as num?)?.toDouble() ?? 1200.0,
+      welfareContribution: priceVal * 0.05,
+      distanceMeters: distanceKm != null
+          ? distanceKm * 1000
+          : distanceM ?? 0.0,
       isEmergency: json['is_emergency'] as bool? ?? false,
-      status: parsedStatus,
+      status: JobStatus.fromApi(json['status']?.toString()),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
-      serviceNotes: json['service_notes'] as String? ?? 'Main switchboard tripping repeatedly when AC turns on.',
+      expiresAt: json['expires_at'] != null
+          ? DateTime.tryParse(json['expires_at'].toString())
+          : null,
+      serviceNotes: json['description']?.toString() ??
+          json['service_notes']?.toString(),
     );
   }
 }

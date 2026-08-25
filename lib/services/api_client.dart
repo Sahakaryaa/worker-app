@@ -1,33 +1,42 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 import '../models/worker_profile.dart';
 import '../models/job.dart';
 import '../models/welfare_transaction.dart';
 import 'mock_data_service.dart';
 
+/// Backend base URL — override with:
+///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000
+const String kApiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'http://10.0.2.2:8000',
+);
+
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
-/// HTTP client for SahaKarya Partner communicating with FastAPI backend.
+/// HTTP client for SahaKarya Partner communicating with the FastAPI backend.
+/// Conforms to API_CONTRACT.md v2.
 class ApiClient {
   final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  static const String _baseUrl = 'http://localhost:8000';
-  bool useMockFallback = true;
+
+  String? _cachedToken;
 
   ApiClient({Dio? dio})
       : _dio = dio ??
             Dio(BaseOptions(
-              baseUrl: _baseUrl,
-              connectTimeout: const Duration(seconds: 4),
-              receiveTimeout: const Duration(seconds: 4),
+              baseUrl: kApiBaseUrl,
+              connectTimeout: const Duration(seconds: 6),
+              receiveTimeout: const Duration(seconds: 10),
               headers: {'Content-Type': 'application/json'},
             )) {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await _storage.read(key: 'auth_token');
-          if (token != null) {
+          final token = await _readToken();
+          if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           return handler.next(options);
@@ -36,103 +45,148 @@ class ApiClient {
     );
   }
 
+  Future<String?> _readToken() async {
+    if (_cachedToken != null) return _cachedToken;
+    try {
+      _cachedToken = await _storage.read(key: 'auth_token');
+    } catch (_) {
+      _cachedToken = null;
+    }
+    return _cachedToken;
+  }
+
+  Future<bool> get hasToken async => (await _readToken()) != null;
+
   Future<void> saveToken(String token) async {
+    _cachedToken = token;
     await _storage.write(key: 'auth_token', value: token);
   }
 
   Future<void> clearToken() async {
+    _cachedToken = null;
     await _storage.delete(key: 'auth_token');
   }
 
+  // ---------------------------------------------------------------- Auth
+
+  /// POST /auth/login {phone, password} -> TokenResponse {access_token, user}
+  /// Returns the raw `user` map or null. Throws on failure.
+  Future<Map<String, dynamic>?> login(String phone, String password) async {
+    final res = await _dio.post('/auth/login',
+        data: {'phone': phone, 'password': password});
+    final data = Map<String, dynamic>.from(res.data as Map);
+    await saveToken(data['access_token'].toString());
+    return data['user'] == null
+        ? null
+        : Map<String, dynamic>.from(data['user'] as Map);
+  }
+
+  /// POST /auth/register {name, phone, password} -> TokenResponse
+  Future<Map<String, dynamic>?> register(
+      String name, String phone, String password) async {
+    final res = await _dio.post('/auth/register',
+        data: {'name': name, 'phone': phone, 'password': password});
+    final data = Map<String, dynamic>.from(res.data as Map);
+    await saveToken(data['access_token'].toString());
+    return data['user'] == null
+        ? null
+        : Map<String, dynamic>.from(data['user'] as Map);
+  }
+
+  // ------------------------------------------------------------- Workers
+
+  /// GET /workers/me -> WorkerResponse. Throws on failure.
   Future<WorkerProfile> getProfile() async {
-    try {
-      final response = await _dio.get('/workers/me');
-      return WorkerProfile.fromJson(response.data);
-    } catch (_) {
-      // DEMO DATA — fallback for offline demo presentations
-      return MockDataService.demoWorkerProfile;
-    }
+    final response = await _dio.get('/workers/me');
+    return WorkerProfile.fromJson(Map<String, dynamic>.from(response.data));
   }
 
-  Future<void> updateAvailability(bool isOnline) async {
-    try {
-      await _dio.patch('/workers/me/availability', data: {'online': isOnline});
-    } catch (_) {
-      // Ignore network errors in demo
-    }
-  }
-
+  /// PATCH /workers/location {lat, lng} -> 204 (flat keys per contract).
   Future<void> updateLocation(double lat, double lng) async {
-    try {
-      await _dio.patch(
-        '/workers/me/location',
-        data: {'latitude': lat, 'longitude': lng},
-      );
-    } catch (_) {
-      // Ignore network errors in demo
-    }
+    await _dio.patch(
+      '/workers/location',
+      data: {'lat': lat, 'lng': lng},
+    );
   }
 
+  // ------------------------------------------------------------ Bookings
+
+  /// POST /bookings/{id}/accept — assigned worker only. FALSE on failure.
   Future<bool> acceptJob(String bookingId) async {
     try {
       await _dio.post('/bookings/$bookingId/accept');
       return true;
+    } on DioException {
+      return false;
     } catch (_) {
-      return true; // Demo fallback
+      return false;
     }
   }
 
+  /// POST /bookings/{id}/decline. FALSE on failure.
   Future<bool> declineJob(String bookingId) async {
     try {
       await _dio.post('/bookings/$bookingId/decline');
       return true;
+    } on DioException {
+      return false;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
+  /// PATCH /bookings/{id}/status {status}. Legal transitions enforced
+  /// server-side; FALSE on failure (never pretends success).
   Future<bool> updateJobStatus(String bookingId, String status) async {
     try {
-      await _dio.patch('/bookings/$bookingId/status', data: {'status': status});
+      await _dio.patch('/bookings/$bookingId/status',
+          data: {'status': status});
       return true;
+    } on DioException {
+      return false;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 
+  /// Best-effort job history read (falls back to demo data offline).
   Future<List<Job>> getJobHistory() async {
     try {
       final res = await _dio.get('/workers/me/jobs');
       final list = res.data as List;
-      return list.map((e) => Job.fromJson(e)).toList();
+      return list
+          .map((e) => Job.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
     } catch (_) {
       return MockDataService.getMockJobs();
     }
   }
 
-  Future<List<WelfareTransaction>> getWelfareTransactions() async {
-    try {
-      final res = await _dio.get('/welfare/me');
-      final list = res.data as List;
-      return list.map((e) => WelfareTransaction.fromJson(e)).toList();
-    } catch (_) {
-      return MockDataService.getMockWelfareTransactions();
-    }
+  // -------------------------------------------------------------- Welfare
+
+  /// GET /welfare/me -> ONE object {balance, total_contributed, transactions}.
+  /// Throws on failure so callers can surface errors.
+  Future<WelfareSnapshot> fetchWelfare() async {
+    final res = await _dio.get('/welfare/me');
+    return WelfareSnapshot.fromJson(Map<String, dynamic>.from(res.data));
   }
 
+  /// Offline/demo fallback matching the contract shape.
+  WelfareSnapshot demoWelfareSnapshot() => MockDataService.getDemoWelfareSnapshot();
+
+  /// POST /welfare/claims {amount > 0, reason(min 3)}. FALSE on failure.
   Future<bool> submitWelfareClaim({
-    required String category,
     required double amount,
     required String reason,
   }) async {
     try {
-      await _dio.post(
-        '/welfare/me/claim',
-        data: {'claim_category': category, 'amount': amount, 'description': reason},
-      );
+      await _dio.post('/welfare/claims',
+          data: {'amount': amount, 'reason': reason});
       return true;
+    } on DioException {
+      return false;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../models/job.dart';
 import '../services/api_client.dart';
 import '../services/mock_data_service.dart';
@@ -18,12 +19,12 @@ class EarningsState {
   final bool isLoading;
 
   const EarningsState({
-    this.todayTotal = 1350.0,
-    this.weekTotal = 8920.0,
-    this.completedJobsToday = 3,
+    this.todayTotal = 0,
+    this.weekTotal = 0,
+    this.completedJobsToday = 0,
     this.jobHistory = const [],
     this.weeklyChartData = const [],
-    this.isLoading = false,
+    this.isLoading = true,
   });
 
   EarningsState copyWith({
@@ -49,9 +50,8 @@ class EarningsNotifier extends StateNotifier<EarningsState> {
   final ApiClient _api;
 
   EarningsNotifier(this._api)
-      : super(EarningsState(
-          jobHistory: MockDataService.getMockJobs(),
-          weeklyChartData: MockDataService.getWeeklyEarnings(),
+      : super(const EarningsState(
+          weeklyChartData: MockDataService.demoWeeklyEarnings,
         )) {
     loadEarnings();
   }
@@ -60,8 +60,29 @@ class EarningsNotifier extends StateNotifier<EarningsState> {
     state = state.copyWith(isLoading: true);
     try {
       final jobs = await _api.getJobHistory();
+      final today = DateTime.now();
+      final todays =
+          jobs.where((j) => _sameDay(j.createdAt, today)).toList();
+      double todaySum = 0;
+      for (final j in todays) {
+        // Worker take-home = price minus the single 5% welfare contribution
+        // (backend deducts at completion).
+        todaySum += j.price - j.welfareContribution;
+      }
+      double weekSum = todaySum;
+      final weekStart = today.subtract(Duration(days: today.weekday - 1));
+      for (final j in jobs) {
+        if (j.createdAt.isBefore(weekStart) && !_sameDay(j.createdAt, today)) {
+          continue;
+        }
+        if (_sameDay(j.createdAt, today)) continue;
+        weekSum += j.price - j.welfareContribution;
+      }
       state = state.copyWith(
         jobHistory: jobs,
+        todayTotal: todaySum,
+        weekTotal: weekSum,
+        completedJobsToday: todays.length,
         isLoading: false,
       );
     } catch (_) {
@@ -70,12 +91,15 @@ class EarningsNotifier extends StateNotifier<EarningsState> {
   }
 
   void recordCompletedJob(Job job) {
-    final updatedList = [job, ...state.jobHistory];
+    final takeHome = job.price - job.welfareContribution;
     state = state.copyWith(
-      todayTotal: state.todayTotal + job.price,
-      weekTotal: state.weekTotal + job.price,
+      todayTotal: state.todayTotal + takeHome,
+      weekTotal: state.weekTotal + takeHome,
       completedJobsToday: state.completedJobsToday + 1,
-      jobHistory: updatedList,
+      jobHistory: [job.copyWith(status: JobStatus.completed), ...state.jobHistory],
     );
   }
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }

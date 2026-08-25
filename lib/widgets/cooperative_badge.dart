@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+
 import '../theme/app_colors.dart';
 
-/// The signature "Cooperative Verified" badge — teal pill with gold checkmark.
-/// Features an elastic scale-in entrance animation and subtle gold shimmer respecting reduced motion.
+/// The signature "Cooperative Verified" badge — indigo informational pill
+/// with gold checkmark and elastic entrance.
 class CooperativeBadge extends StatelessWidget {
   final bool compact;
   final bool isCompact;
@@ -32,11 +33,11 @@ class CooperativeBadge extends StatelessWidget {
         vertical: isSmall ? 3 : 5,
       ),
       decoration: BoxDecoration(
-        color: AppColors.teal,
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.indigo,
+        borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: AppColors.teal.withValues(alpha: 0.35),
+            color: AppColors.indigo.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -45,11 +46,7 @@ class CooperativeBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.verified_rounded,
-            size: isSmall ? 12 : 15,
-            color: AppColors.gold,
-          ),
+          Icon(Icons.verified_rounded, size: isSmall ? 12 : 15, color: AppColors.goldLight),
           SizedBox(width: isSmall ? 4 : 6),
           Text(
             federationName ?? (isSmall ? 'Verified' : 'Cooperative Verified'),
@@ -64,23 +61,16 @@ class CooperativeBadge extends StatelessWidget {
       ),
     );
 
-    if (disableAnimations || !animate) {
-      return badgeContent;
-    }
+    if (disableAnimations || !animate) return badgeContent;
 
     return badgeContent
         .animate()
         .fadeIn(duration: 350.ms)
         .scale(
           begin: const Offset(0.85, 0.85),
-          end: const Offset(1.0, 1.0),
+          end: const Offset(1, 1),
           curve: Curves.elasticOut,
           duration: 600.ms,
-        )
-        .then(delay: 200.ms)
-        .shimmer(
-          duration: 1200.ms,
-          color: AppColors.gold.withValues(alpha: 0.4),
         );
   }
 }

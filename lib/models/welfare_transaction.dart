@@ -1,8 +1,26 @@
 enum WelfareTransactionType { contribution, claim }
 
-enum WelfareClaimStatus { pending, approved, disbursed, rejected }
+/// Contract statuses ONLY: pending | approved | completed (no disbursed).
+enum WelfareClaimStatus { pending, approved, completed }
 
-/// Federation Welfare Fund Transaction model.
+ WelfareClaimStatus _parseStatus(String? raw) => switch (raw) {
+      'pending' => WelfareClaimStatus.pending,
+      'approved' => WelfareClaimStatus.approved,
+      'completed' => WelfareClaimStatus.completed,
+      // Legacy/unknown values map to approved rather than crashing.
+      _ => WelfareClaimStatus.approved,
+    };
+
+extension WelfareClaimStatusX on WelfareClaimStatus {
+  String get label => switch (this) {
+        WelfareClaimStatus.pending => 'Pending',
+        WelfareClaimStatus.approved => 'Approved',
+        WelfareClaimStatus.completed => 'Completed',
+      };
+}
+
+/// Federation Welfare Fund transaction per API_CONTRACT.md.
+/// Text key is `reason` (NOT description).
 class WelfareTransaction {
   final String id;
   final String workerId;
@@ -10,45 +28,72 @@ class WelfareTransaction {
   final double amount;
   final WelfareClaimStatus status;
   final DateTime createdAt;
-  final String description;
-  final String? claimCategory; // "Medical", "Tool Grant", "Accident Relief", "Pension"
+  final String reason;
 
   const WelfareTransaction({
     required this.id,
-    required this.workerId,
+    this.workerId = '',
     required this.type,
     required this.amount,
     required this.status,
     required this.createdAt,
-    required this.description,
-    this.claimCategory,
+    this.reason = '',
   });
 
   bool get isContribution => type == WelfareTransactionType.contribution;
 
   factory WelfareTransaction.fromJson(Map<String, dynamic> json) {
-    final typeStr = json['type'] as String? ?? 'contribution';
-    final statusStr = json['status'] as String? ?? 'approved';
-
+    final typeStr = json['type']?.toString() ?? 'contribution';
     return WelfareTransaction(
-      id: json['_id'] as String? ?? json['id'] as String? ?? 'wt_${DateTime.now().millisecondsSinceEpoch}',
-      workerId: json['worker_id'] as String? ?? '',
+      id: json['_id']?.toString() ??
+          json['id']?.toString() ??
+          'wt_${DateTime.now().millisecondsSinceEpoch}',
+      workerId: json['worker_id']?.toString() ?? '',
       type: typeStr == 'claim'
           ? WelfareTransactionType.claim
           : WelfareTransactionType.contribution,
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      status: switch (statusStr) {
-        'pending' => WelfareClaimStatus.pending,
-        'approved' => WelfareClaimStatus.approved,
-        'disbursed' => WelfareClaimStatus.disbursed,
-        'rejected' => WelfareClaimStatus.rejected,
-        _ => WelfareClaimStatus.approved,
-      },
+      status: _parseStatus(json['status']?.toString()),
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
           : DateTime.now(),
-      description: json['description'] as String? ?? '1% Welfare Contribution from Job',
-      claimCategory: json['claim_category'] as String?,
+      reason: json['reason']?.toString() ?? 'Welfare contribution',
+    );
+  }
+}
+
+/// Snapshot of GET /welfare/me — ONE object:
+/// {worker_id, balance, total_contributed, transactions:[...]}
+class WelfareSnapshot {
+  final String workerId;
+  final double balance;
+  final double totalContributed;
+  final List<WelfareTransaction> transactions;
+
+  const WelfareSnapshot({
+    this.workerId = '',
+    this.balance = 0,
+    this.totalContributed = 0,
+    this.transactions = const [],
+  });
+
+  double get totalClaimedApproved => transactions
+      .where((t) =>
+          t.type == WelfareTransactionType.claim &&
+          t.status != WelfareClaimStatus.pending)
+      .fold(0.0, (sum, t) => sum + t.amount);
+
+  factory WelfareSnapshot.fromJson(Map<String, dynamic> json) {
+    final txs = (json['transactions'] as List?)
+            ?.map((e) =>
+                WelfareTransaction.fromJson(Map<String, dynamic>.from(e)))
+            .toList() ??
+        const <WelfareTransaction>[];
+    return WelfareSnapshot(
+      workerId: json['worker_id']?.toString() ?? '',
+      balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
+      totalContributed: (json['total_contributed'] as num?)?.toDouble() ?? 0.0,
+      transactions: txs,
     );
   }
 }

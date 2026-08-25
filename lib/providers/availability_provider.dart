@@ -1,28 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/api_client.dart';
+
 import '../services/location_stream_service.dart';
 
 final availabilityProvider =
     StateNotifierProvider<AvailabilityNotifier, bool>((ref) {
-  final api = ref.watch(apiClientProvider);
   final locStream = ref.watch(locationStreamServiceProvider);
   ref.onDispose(() => locStream.stopStreaming());
-  return AvailabilityNotifier(api, locStream);
+  // Start OFFLINE to match the backend model default (is_online=false).
+  return AvailabilityNotifier(locStream, initialOnline: false);
 });
 
-/// Hero availability state notifier — switches online/offline status and controls location streaming.
+/// Availability switch. The contract has no dedicated toggle endpoint, so the
+/// online flag is local-only for now; going online starts GPS location
+/// streaming (PATCH /workers/location) so dispatch can target this worker.
 class AvailabilityNotifier extends StateNotifier<bool> {
-  final ApiClient _api;
   final LocationStreamService _locStream;
 
-  AvailabilityNotifier(this._api, this._locStream) : super(true);
+  AvailabilityNotifier(this._locStream, {required bool initialOnline})
+      : super(initialOnline);
 
   Future<void> toggle() async {
     final next = !state;
     state = next;
-    await _api.updateAvailability(next);
     if (next) {
       _locStream.startStreaming();
+      // Best-effort immediate position push; no availability endpoint in
+      // the current contract, so nothing else is sent.
     } else {
       _locStream.stopStreaming();
     }
@@ -35,11 +38,5 @@ class AvailabilityNotifier extends StateNotifier<bool> {
     } else {
       _locStream.stopStreaming();
     }
-  }
-
-  @override
-  void dispose() {
-    _locStream.stopStreaming();
-    super.dispose();
   }
 }

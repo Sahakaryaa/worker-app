@@ -1,425 +1,503 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
-import '../../theme/app_colors.dart';
-import '../../providers/welfare_provider.dart';
-import '../../models/welfare_transaction.dart';
-import '../../widgets/primary_button.dart';
-import '../../widgets/cooperative_badge.dart';
 
-/// Federation Welfare Fund Screen per 03-worker-app-flutter.md §5 & §8.
-/// Prominently showcases worker social security, healthcare, and tool grant claims.
+import '../../models/welfare_transaction.dart';
+import '../../providers/welfare_provider.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_snack_bar.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/skeleton_box.dart';
+import '../../widgets/status_chip.dart';
+
+/// Welfare ledger — dark balance hero with CountUpText, typed transactions
+/// (contribution ↓ green / claim ↑ amber), StatusChips and a validated
+/// claim submission sheet.
 class WelfareFundScreen extends ConsumerWidget {
   const WelfareFundScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final welfareState = ref.watch(welfareProvider);
+    final welfare = ref.watch(welfareProvider);
+
+    // Surface load errors once per stamp.
+    ref.listen(welfareProvider, (prev, next) {
+      if (prev?.error != next.error && next.error != null && context.mounted) {
+        AppSnackBar.show(context, next.error!, type: SnackType.error);
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: Text(
-          'Federation Welfare Fund',
-          style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: AppColors.teal,
-        foregroundColor: Colors.white,
+        title: Text('Welfare Fund',
+            style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700)),
+        backgroundColor: AppColors.bg,
+        foregroundColor: AppColors.ink,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        color: AppColors.goldDark,
+        onRefresh: () => ref.read(welfareProvider.notifier).loadWelfare(),
+        child: ListView(
+          physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics()),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
           children: [
-            // Hero Welfare Passbook Card
+            // ---------------- Balance hero ----------------
             Container(
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                gradient: AppColors.darkCardGradient,
+                gradient: AppColors.nightGradient,
                 borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.teal.withValues(alpha: 0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                boxShadow: AppColors.softShadow,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.shield_rounded, color: AppColors.gold, size: 22),
-                          const SizedBox(width: 8),
-                          Text(
-                            'SahaKarya Social Security',
-                            style: GoogleFonts.inter(
-                              color: Colors.white,
+                      const Icon(Icons.volunteer_activism_rounded,
+                          color: AppColors.goldLight, size: 20),
+                      const SizedBox(width: 8),
+                      Text('SahaKarya Social Security',
+                          style: GoogleFonts.inter(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const CooperativeBadge(isCompact: true),
+                              color: Colors.white70)),
                     ],
                   ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Available Welfare Balance',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.white70,
-                    ),
-                  ),
+                  const SizedBox(height: 16),
+                  Text('Available balance',
+                      style: GoogleFonts.inter(
+                          fontSize: 12, color: Colors.white60)),
                   const SizedBox(height: 4),
-                  Text(
-                    '₹${welfareState.currentBalance.toStringAsFixed(2)}',
-                    style: GoogleFonts.sora(
-                      fontSize: 34,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.gold,
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(end: welfare.currentBalance),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, v, _) => Text(
+                      '₹${v.toStringAsFixed(v % 1 == 0 ? 0 : 2)}',
+                      style: GoogleFonts.sora(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                        color: AppColors.goldLight,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
-                  const Divider(color: Colors.white24),
-                  const SizedBox(height: 12),
-
-                  // Quick Stats Row
+                  Divider(color: Colors.white.withValues(alpha: .12), height: 1),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Total Accrued',
-                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
-                            ),
-                            Text(
-                              '₹${welfareState.totalContributed.toStringAsFixed(0)}',
-                              style: GoogleFonts.sora(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
+                        child: _heroStat(
+                          'Total contributed',
+                          '₹${welfare.totalContributed.toStringAsFixed(0)}',
                         ),
                       ),
-                      Container(width: 1, height: 28, color: Colors.white24),
+                      Container(width: 1, height: 30, color: Colors.white24),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'Claims Disbursed',
-                              style: GoogleFonts.inter(fontSize: 11, color: Colors.white60),
-                            ),
-                            Text(
-                              '₹${welfareState.totalClaimed.toStringAsFixed(0)}',
-                              style: GoogleFonts.sora(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.gold,
-                              ),
-                            ),
-                          ],
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _heroStat(
+                            'Claims paid out',
+                            '₹${welfare.totalClaimedApproved.toStringAsFixed(0)}',
+                            alignRight: true,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 18),
+            ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.06, end: 0),
 
-            // Cooperative Trust Policy Explanation Banner
+            const SizedBox(height: 14),
+
+            // Policy note
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.teal.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: AppColors.teal.withValues(alpha: 0.2)),
+                color: AppColors.indigo.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(16),
+                border:
+                    Border.all(color: AppColors.indigo.withValues(alpha: 0.22)),
               ),
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                      color: AppColors.teal,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.volunteer_activism_rounded, color: Colors.white, size: 22),
-                  ),
-                  const SizedBox(width: 14),
+                  const Icon(Icons.info_outline_rounded,
+                      size: 19, color: AppColors.indigo),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '100% Ring-Fenced Member Fund',
-                          style: GoogleFonts.sora(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.teal,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '1% of every completed job is directly routed into your federation welfare ledger. Never utilized as platform revenue.',
-                          style: GoogleFonts.inter(fontSize: 12, color: AppColors.inkLight),
-                        ),
-                      ],
+                    child: Text(
+                      'Exactly 5% of every completed job is ring-fenced into your cooperative fund — never platform revenue.',
+                      style: GoogleFonts.inter(
+                          fontSize: 12, height: 1.5, color: AppColors.inkSoft),
                     ),
                   ),
                 ],
               ),
-            ),
+            ).animate(delay: 80.ms).fadeIn(duration: 400.ms),
+
             const SizedBox(height: 18),
 
-            // Submit Claim CTA Button
-            PrimaryButton(
-              label: 'Request Welfare Claim / Tool Grant',
+            AppButton(
+              label: 'Request a Claim',
               icon: Icons.add_circle_outline_rounded,
-              backgroundColor: AppColors.orange,
-              onPressed: () => _showClaimDialog(context, ref),
+              isLoading: welfare.submittingClaim,
+              onPressed: () => _showClaimSheet(context, ref),
             ),
-            const SizedBox(height: 24),
 
-            // Transaction History Title
-            Text(
-              'Welfare Passbook & Claims Ledger',
-              style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
+            const SizedBox(height: 22),
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text('Passbook & claims ledger',
+                  style: GoogleFonts.sora(
+                      fontSize: 15.5, fontWeight: FontWeight.w800)),
             ),
-            const SizedBox(height: 12),
 
-            // Transactions list
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: welfareState.transactions.length,
-              itemBuilder: (context, index) {
-                final tx = welfareState.transactions[index];
-                final isClaim = tx.type == WelfareTransactionType.claim;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isClaim
-                              ? AppColors.gold.withValues(alpha: 0.15)
-                              : AppColors.teal.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isClaim ? Icons.medical_services_rounded : Icons.savings_rounded,
-                          color: isClaim ? AppColors.goldDark : AppColors.teal,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isClaim
-                                  ? 'Claim: ${tx.claimCategory ?? "Medical / Tool"}'
-                                  : '1% Job Allocation',
-                              style: GoogleFonts.sora(fontSize: 14, fontWeight: FontWeight.w700),
-                            ),
-                            Text(
-                              tx.description,
-                              style: GoogleFonts.inter(fontSize: 12, color: AppColors.inkLight),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              DateFormat('dd MMM yyyy, hh:mm a').format(tx.createdAt),
-                              style: GoogleFonts.inter(fontSize: 11, color: AppColors.inkMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            isClaim
-                                ? '₹${tx.amount.toStringAsFixed(0)}'
-                                : '+₹${tx.amount.toStringAsFixed(1)}',
-                            style: GoogleFonts.sora(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: isClaim ? AppColors.orange : AppColors.teal,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: isClaim
-                                  ? (tx.status == WelfareClaimStatus.disbursed
-                                      ? AppColors.success.withValues(alpha: 0.1)
-                                      : AppColors.warning.withValues(alpha: 0.1))
-                                  : AppColors.success.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              tx.status.name.toUpperCase(),
-                              style: GoogleFonts.inter(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: isClaim
-                                    ? (tx.status == WelfareClaimStatus.disbursed
-                                        ? AppColors.success
-                                        : AppColors.warning)
-                                    : AppColors.success,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+            if (welfare.isLoading)
+              ...const [
+                SkeletonCard(height: 84),
+                SkeletonCard(height: 84),
+                SkeletonCard(height: 84),
+              ]
+            else if (welfare.transactions.isEmpty)
+              EmptyState(
+                icon: Icons.receipt_long_outlined,
+                title: 'No transactions yet',
+                subtitle:
+                    'Your 5% contributions from completed jobs will appear here.',
+              )
+            else
+              ...welfare.transactions.asMap().entries.map((entry) {
+                final i = entry.key;
+                return _TransactionTile(tx: entry.value)
+                    .animate(delay: (50 * i).clamp(0, 400).ms)
+                    .fadeIn(duration: 350.ms)
+                    .slideY(begin: 0.08, end: 0);
+              }),
           ],
         ),
       ),
     );
   }
 
-  void _showClaimDialog(BuildContext context, WidgetRef ref) {
-    String category = 'Medical';
-    final amountController = TextEditingController(text: '1500');
-    final descController = TextEditingController(text: 'Protective safety gear & goggles reimbursement');
+  Widget _heroStat(String label, String value, {bool alignRight = false}) =>
+      Column(
+        crossAxisAlignment: alignRight
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.inter(fontSize: 11, color: Colors.white54)),
+          const SizedBox(height: 3),
+          Text(value,
+              style: GoogleFonts.sora(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
+                  color: Colors.white)),
+        ],
+      );
+
+  // ------------------------------------------------------------ claim modal
+
+  void _showClaimSheet(BuildContext context, WidgetRef ref) {
+    final amountCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    final balance = ref.read(welfareProvider).currentBalance;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Container(
-              padding: EdgeInsets.fromLTRB(
-                20,
-                20,
-                20,
-                MediaQuery.of(context).viewInsets.bottom + 20,
-              ),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Request Welfare Claim',
-                        style: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w700),
+      builder: (sheetContext) => Consumer(builder: (context, sheetRef, _) {
+        final submitting = sheetRef.watch(welfareProvider).submittingClaim;
+        return Padding(
+          padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+            decoration: const BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: StatefulBuilder(
+              builder: (context, setSheetState) {
+                final amount = double.tryParse(amountCtrl.text) ?? 0;
+                final validAmount = amount > 0 && amount <= balance;
+                final validReason = reasonCtrl.text.trim().length >= 3;
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Request Welfare Claim',
+                            style: GoogleFonts.sora(
+                                fontSize: 17, fontWeight: FontWeight.w800)),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    // Amount display — keypad-styled
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceAlt,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: amount > balance
+                              ? AppColors.danger.withValues(alpha: 0.6)
+                              : validAmount
+                                  ? AppColors.success.withValues(alpha: 0.45)
+                                  : Colors.transparent,
+                          width: 1.6,
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Claim Category',
-                    style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: ['Medical', 'Tool Grant', 'Emergency Relief', 'Pension']
-                        .map((cat) => ChoiceChip(
-                              label: Text(cat),
-                              selected: category == cat,
-                              selectedColor: AppColors.orange,
-                              labelStyle: GoogleFonts.inter(
-                                color: category == cat ? Colors.white : AppColors.ink,
-                                fontWeight: FontWeight.w600,
+                      child: Column(
+                        children: [
+                          Text('CLAIM AMOUNT',
+                              style: GoogleFonts.inter(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.2,
+                                  color: AppColors.inkFaint)),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text('₹',
+                                  style: GoogleFonts.sora(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.goldDark)),
+                              Text(
+                                amountCtrl.text.isEmpty ? '0' : amountCtrl.text,
+                                style: GoogleFonts.sora(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.5),
                               ),
-                              onSelected: (_) => setState(() => category = cat),
-                            ))
-                        .toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Claim Amount (₹)',
-                      filled: true,
-                      fillColor: AppColors.bg,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descController,
-                    maxLines: 2,
-                    decoration: InputDecoration(
-                      labelText: 'Reason / Item Details',
-                      filled: true,
-                      fillColor: AppColors.bg,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  PrimaryButton(
-                    label: 'Submit Claim to Federation Board',
-                    icon: Icons.send_rounded,
-                    backgroundColor: AppColors.teal,
-                    onPressed: () async {
-                      final amount = double.tryParse(amountController.text) ?? 1500.0;
-                      await ref.read(welfareProvider.notifier).submitClaim(
-                            category: category,
-                            amount: amount,
-                            description: descController.text,
-                          );
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Welfare claim submitted! Federation officials notified.'),
-                            backgroundColor: AppColors.success,
-                            behavior: SnackBarBehavior.floating,
+                            ],
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            amount > balance
+                                ? 'Exceeds your ₹${balance.toStringAsFixed(0)} balance'
+                                : 'Available: ₹${balance.toStringAsFixed(0)}',
+                            style: GoogleFonts.inter(
+                                fontSize: 11.5,
+                                color: amount > balance
+                                    ? AppColors.danger
+                                    : AppColors.inkSoft),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.center,
+                      children: ['500', '1000', '2500', '5000'].map((v) {
+                        final over =
+                            (double.tryParse(v) ?? 0) > balance;
+                        return ActionChip(
+                          label: Text('₹$v',
+                              style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: over
+                                      ? AppColors.inkFaint
+                                      : AppColors.goldDark)),
+                          backgroundColor: over
+                              ? AppColors.surfaceAlt.withValues(alpha: 0.5)
+                              : AppColors.gold.withValues(alpha: 0.1),
+                          side: BorderSide(
+                              color: over
+                                  ? AppColors.border
+                                  : AppColors.gold.withValues(alpha: 0.35)),
+                          onPressed: over
+                              ? null
+                              : () => setSheetState(() => amountCtrl.text = v),
                         );
-                      }
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    TextField(
+                      controller: reasonCtrl,
+                      maxLines: 2,
+                      maxLength: 160,
+                      onChanged: (_) => setSheetState(() {}),
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        hintText: 'Reason — min 3 characters',
+                        counterText: '',
+                        prefixIcon: const Icon(Icons.edit_note_rounded,
+                            size: 21, color: AppColors.indigo),
+                        filled: true,
+                        fillColor: AppColors.surfaceAlt,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 13),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide:
+                                const BorderSide(color: Colors.transparent)),
+                        focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: AppColors.gold)),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    AppButton(
+                      label: validReason && validAmount
+                          ? 'Submit Claim'
+                          : 'Enter amount & reason to submit',
+                      icon: Icons.send_rounded,
+                      isLoading: submitting,
+                      onPressed: (!validAmount || !validReason || submitting)
+                          ? null
+                          : () async {
+                              FocusScope.of(sheetContext).unfocus();
+                              HapticFeedback.mediumImpact();
+                              final ok = await sheetRef
+                                  .read(welfareProvider.notifier)
+                                  .submitClaim(
+                                    amount: amount,
+                                    reason: reasonCtrl.text,
+                                  );
+                              if (!sheetContext.mounted) return;
+                              if (ok) {
+                                Navigator.pop(sheetContext);
+                                AppSnackBar.show(context,
+                                    'Claim submitted for federation review.',
+                                    type: SnackType.success);
+                              } else {
+                                AppSnackBar.show(
+                                    context,
+                                    sheetRef.read(welfareProvider).error ??
+                                        'Claim failed.',
+                                    type: SnackType.error);
+                              }
+                            },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         );
-      },
+      }),
+    );
+  }
+}
+
+// ---------------------------------------------------------------- tiles
+
+class _TransactionTile extends StatelessWidget {
+  final WelfareTransaction tx;
+  const _TransactionTile({required this.tx});
+
+  @override
+  Widget build(BuildContext context) {
+    final isClaim = tx.type == WelfareTransactionType.claim;
+    final accent = isClaim ? AppColors.warning : AppColors.success;
+    final dateLabel =
+        '${tx.createdAt.day}/${tx.createdAt.month} • ${tx.createdAt.hour}:${tx.createdAt.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.11),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isClaim
+                  ? Icons.north_east_rounded // claim ↑ amber
+                  : Icons.south_west_rounded, // contribution ↓ green
+              size: 18,
+              color: accent,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isClaim ? 'Claim' : 'Contribution',
+                  style: GoogleFonts.sora(
+                      fontSize: 13.5, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tx.reason.isEmpty ? '—' : tx.reason,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                      fontSize: 11.5, height: 1.4, color: AppColors.inkSoft),
+                ),
+                const SizedBox(height: 3),
+                Text(dateLabel,
+                    style: GoogleFonts.inter(
+                        fontSize: 10.5, color: AppColors.inkFaint)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${isClaim ? "−" : "+"}₹${tx.amount.toStringAsFixed(tx.amount % 1 == 0 ? 0 : 1)}',
+                style: GoogleFonts.sora(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: isClaim ? AppColors.goldDark : AppColors.success),
+              ),
+              const SizedBox(height: 4),
+              StatusChip.welfare(tx.status),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
