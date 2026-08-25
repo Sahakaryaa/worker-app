@@ -103,8 +103,8 @@ class HomeDashboardScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              ),
-            ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.04, end: 0),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.04, end: 0),
+            ),
 
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

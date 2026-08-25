@@ -13,36 +13,32 @@ import 'screens/splash/splash_screen.dart';
 import 'screens/welfare/welfare_fund_screen.dart';
 import 'widgets/animated_bottom_nav.dart';
 
-final GlobalKey<NavigatorState> _rootNavigatorKey =
+final GlobalKey<NavigatorState> rootNavigatorKey =
     GlobalKey<NavigatorState>(debugLabel: 'root');
 
-final _authRefresh = ChangeNotifierProvider<_AuthRefresh>((ref) {
-  final notifier = _AuthRefresh();
-  ref.listen(authProvider, (_, __) => notifier.ping());
-  ref.onDispose(notifier.dispose);
-  return notifier;
-});
-
-class _AuthRefresh extends ChangeNotifier {
-  void ping() => notifyListeners();
-}
-
 final routerProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authProvider);
+
   return GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
-    refreshListenable: ref.watch(_authRefresh),
     redirect: (context, state) {
-      final auth = ref.read(authProvider);
-      if (auth.isLoading && state.matchedLocation == '/') return null;
-
       final location = state.matchedLocation;
+      final isAuthRoute = location == '/login' || location == '/onboarding';
 
-      if (!auth.isAuthenticated) {
-        // Splash handles its own wait; everything else funnels to login.
-        return location == '/' ? null : '/login';
+      // While on splash screen, let SplashScreen handle its own timer & transition.
+      if (location == '/') return null;
+
+      if (!authState.isAuthenticated) {
+        // Allow unauthenticated users on login or onboarding routes.
+        if (isAuthRoute) return null;
+        // Protect all other routes by redirecting to login.
+        return '/login';
       }
-      if (location == '/' || location == '/login') return '/home';
+
+      // If authenticated and currently on login or onboarding, go to home.
+      if (isAuthRoute) return '/home';
+
       return null;
     },
     routes: [
@@ -56,7 +52,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/onboarding',
-        parentNavigatorKey: _rootNavigatorKey,
+        parentNavigatorKey: rootNavigatorKey,
         builder: (context, state) => const WorkerRegistrationScreen(),
       ),
       StatefulShellRoute.indexedStack(

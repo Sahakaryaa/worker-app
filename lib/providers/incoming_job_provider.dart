@@ -84,7 +84,15 @@ class IncomingJobNotifier extends StateNotifier<JobOfferState> {
     if (job == null) return;
     _countdownTimer?.cancel();
 
-    final ok = await _api.acceptJob(job.bookingId);
+    final isDemo = job.id.startsWith('job_') || job.bookingId.startsWith('b_');
+    bool ok = true;
+    if (!isDemo) {
+      ok = await _api.acceptJob(job.bookingId);
+    } else {
+      // Best effort network call in demo mode
+      _api.acceptJob(job.bookingId).ignore();
+    }
+
     if (!ok) {
       // Surface failure; do NOT flip any state to accepted.
       // Resume the countdown so the worker can retry (auto-decline at zero).
@@ -127,12 +135,17 @@ class IncomingJobNotifier extends StateNotifier<JobOfferState> {
     _countdownTimer?.cancel();
     state = state.copyWith(clearOffer: true, isCountingDown: false);
 
-    final ok = await _api.declineJob(job.bookingId);
-    if (!ok && !autoDeclined) {
-      state = state.copyWith(
-        lastError: 'Could not reach server to decline the job.',
-        errorStamp: DateTime.now().millisecondsSinceEpoch,
-      );
+    final isDemo = job.id.startsWith('job_') || job.bookingId.startsWith('b_');
+    if (!isDemo) {
+      final ok = await _api.declineJob(job.bookingId);
+      if (!ok && !autoDeclined) {
+        state = state.copyWith(
+          lastError: 'Could not reach server to decline the job.',
+          errorStamp: DateTime.now().millisecondsSinceEpoch,
+        );
+      }
+    } else {
+      _api.declineJob(job.bookingId).ignore();
     }
   }
 

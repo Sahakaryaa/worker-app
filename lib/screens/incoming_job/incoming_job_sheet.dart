@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/incoming_job_provider.dart';
+import '../../router.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/formatting.dart';
 import '../../widgets/app_button.dart';
@@ -18,9 +19,14 @@ class IncomingJobSheet extends ConsumerWidget {
   const IncomingJobSheet({super.key});
 
   /// Show through the root navigator from anywhere in the widget tree.
-  static Future<void> show(BuildContext context) {
+  static Future<void> show([BuildContext? context]) {
+    final navContext = (context != null && Navigator.maybeOf(context) != null)
+        ? context
+        : rootNavigatorKey.currentContext;
+    if (navContext == null) return Future.value();
+
     return showModalBottomSheet(
-      context: context,
+      context: navContext,
       useRootNavigator: true,
       isDismissible: false,
       enableDrag: false,
@@ -189,8 +195,7 @@ class IncomingJobSheet extends ConsumerWidget {
 
   void _accept(BuildContext context, WidgetRef ref) async {
     final notifier = ref.read(incomingJobProvider.notifier);
-    final router = GoRouter.of(context);
-    final navigator = Navigator.of(context, rootNavigator: true);
+    final navContext = rootNavigatorKey.currentContext ?? context;
     await notifier.acceptCurrentOffer();
     if (!context.mounted) return;
     final err = ref.read(incomingJobProvider).lastError;
@@ -200,20 +205,26 @@ class IncomingJobSheet extends ConsumerWidget {
       AppSnackBar.show(context, err, type: SnackType.error);
       return;
     }
-    navigator.pop();
-    router.go('/active-job');
+    if (Navigator.of(context, rootNavigator: true).canPop()) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+    if (navContext.mounted) {
+      GoRouter.of(navContext).go('/active-job');
+    }
   }
 
   void _decline(BuildContext context, WidgetRef ref) async {
-    final navigator = Navigator.of(context, rootNavigator: true);
     HapticFeedback.lightImpact();
     await ref.read(incomingJobProvider.notifier).declineCurrentOffer();
+    if (!context.mounted) return;
     final err = ref.read(incomingJobProvider).lastError;
-    if (context.mounted && err != null) {
+    if (err != null) {
       ref.read(incomingJobProvider.notifier).consumeError();
       AppSnackBar.show(context, err, type: SnackType.warning);
     }
-    if (navigator.canPop()) navigator.pop();
+    if (Navigator.of(context, rootNavigator: true).canPop()) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
   }
 
   static Widget _chip(IconData icon, String label, {bool highlight = false}) {

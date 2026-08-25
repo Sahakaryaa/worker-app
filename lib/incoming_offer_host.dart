@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/incoming_job_provider.dart';
+import 'router.dart';
 import 'screens/incoming_job/incoming_job_sheet.dart';
 
 /// App-root wrapper: keeps the incoming-offer listener alive on EVERY tab.
@@ -32,9 +33,11 @@ class _IncomingOfferHostState extends ConsumerState<IncomingOfferHost> {
 
   void _presentSheet() {
     if (_sheetOpen || !mounted) return;
+    final navContext = rootNavigatorKey.currentContext;
+    if (navContext == null) return;
     _sheetOpen = true;
     HapticFeedback.heavyImpact();
-    IncomingJobSheet.show(context).whenComplete(() => _sheetOpen = false);
+    IncomingJobSheet.show(navContext).whenComplete(() => _sheetOpen = false);
   }
 
   @override
@@ -45,17 +48,21 @@ class _IncomingOfferHostState extends ConsumerState<IncomingOfferHost> {
       if (!had && has) {
         if (!_sheetOpen) _presentSheet();
       }
-      if (next.lastError != null && context.mounted) {
+      if (next.lastError != null) {
         ref.read(incomingJobProvider.notifier).consumeError();
-        ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(next.lastError!),
-          backgroundColor: AppSnackTone.error.color,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ));
+        final navContext = rootNavigatorKey.currentContext ?? context;
+        final messenger = ScaffoldMessenger.maybeOf(navContext);
+        if (messenger != null) {
+          messenger.clearSnackBars();
+          messenger.showSnackBar(SnackBar(
+            content: Text(next.lastError!),
+            backgroundColor: AppSnackTone.error.color,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ));
+        }
       }
     });
 

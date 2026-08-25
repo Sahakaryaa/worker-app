@@ -74,9 +74,16 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     if (job == null || state.busy) return false;
     state = state.copyWith(busy: true, clearError: true);
 
-    // Backend deducts the 5% welfare contribution at completion.
-    final ok = await _api.updateJobStatus(
-        job.bookingId, JobStatus.completed.apiValue);
+    final isDemo = job.id.startsWith('job_') || job.bookingId.startsWith('b_');
+    bool ok = true;
+    if (!isDemo) {
+      ok = await _api.updateJobStatus(
+          job.bookingId, JobStatus.completed.apiValue);
+    } else {
+      _api.updateJobStatus(
+          job.bookingId, JobStatus.completed.apiValue).ignore();
+    }
+
     if (!ok) {
       _fail('Could not complete the job. Check your connection.');
       return false;
@@ -116,8 +123,14 @@ class ActiveJobNotifier extends StateNotifier<ActiveJobState> {
     if (job == null || state.busy) return false;
     state = state.copyWith(busy: true, clearError: true);
 
-    final ok =
-        await _api.updateJobStatus(job.bookingId, next.apiValue);
+    final isDemo = job.id.startsWith('job_') || job.bookingId.startsWith('b_');
+    bool ok = true;
+    if (!isDemo) {
+      ok = await _api.updateJobStatus(job.bookingId, next.apiValue);
+    } else {
+      _api.updateJobStatus(job.bookingId, next.apiValue).ignore();
+    }
+
     if (!ok) {
       _fail('Could not update to "${next.label}". Check your connection.');
       return false;

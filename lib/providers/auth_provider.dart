@@ -52,12 +52,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   /// Restore session from stored token -> GET /workers/me.
   Future<void> _bootstrap() async {
-    if (!await _api.hasToken) {
-      state = state.copyWith(isLoading: false);
-      return;
-    }
     try {
-      final profile = await _api.getProfile();
+      final hasToken = await _api.hasToken.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => false,
+      );
+      if (!hasToken) {
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+      final profile = await _api.getProfile().timeout(const Duration(seconds: 4));
       state = state.copyWith(
         profile: profile,
         isAuthenticated: true,

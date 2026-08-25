@@ -25,28 +25,32 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _routeAfterReveal() async {
+    // Wait for gold reveal and text animations (2.1s)
     await Future<void>.delayed(const Duration(milliseconds: 2100));
     if (!mounted || _navigated) return;
+
     final auth = ref.read(authProvider);
     if (auth.isLoading) {
-      // Give bootstrap a short grace period before deciding.
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-      if (!mounted) return;
+      // Allow bootstrap a short extra moment (up to 1s) to finish reading token/profile
+      for (int i = 0; i < 10; i++) {
+        if (!ref.read(authProvider).isLoading || !mounted) break;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
     }
+
+    if (!mounted || _navigated) return;
     _navigated = true;
-    if (ref.read(authProvider).isAuthenticated) {
-      context.go('/home');
-    } else {
-      context.go('/login');
-    }
+
+    final isAuth = ref.read(authProvider).isAuthenticated;
+    context.go(isAuth ? '/home' : '/login');
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(authProvider, (prev, next) {
+      // If bootstrap finished and reveal duration has elapsed, navigate immediately
       if (!_navigated && !next.isLoading && prev?.isLoading == true) {
-        _navigated = true;
-        context.go(next.isAuthenticated ? '/home' : '/login');
+        // Handled naturally by _routeAfterReveal when animation completes
       }
     });
 

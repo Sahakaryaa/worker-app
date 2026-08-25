@@ -48,7 +48,9 @@ class ApiClient {
   Future<String?> _readToken() async {
     if (_cachedToken != null) return _cachedToken;
     try {
-      _cachedToken = await _storage.read(key: 'auth_token');
+      _cachedToken = await _storage
+          .read(key: 'auth_token')
+          .timeout(const Duration(seconds: 2));
     } catch (_) {
       _cachedToken = null;
     }
