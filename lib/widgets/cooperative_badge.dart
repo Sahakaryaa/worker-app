@@ -69,8 +69,8 @@ class CooperativeBadge extends StatelessWidget {
         .scale(
           begin: const Offset(0.85, 0.85),
           end: const Offset(1, 1),
-          curve: Curves.elasticOut,
-          duration: 600.ms,
+          curve: Curves.easeOutBack,
+          duration: 350.ms,
         );
   }
 }

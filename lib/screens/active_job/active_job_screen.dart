@@ -121,8 +121,9 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
                   child: const Icon(Icons.check_rounded, color: Colors.white, size: 40),
                 ).animate().scale(
                       begin: const Offset(0.3, 0.3),
-                      curve: Curves.elasticOut,
-                      duration: 700.ms,
+                      end: const Offset(1, 1),
+                      curve: Curves.easeOutBack,
+                      duration: 400.ms,
                     ),
                 const SizedBox(height: 16),
                 Text(
@@ -206,10 +207,10 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.night1,
+      backgroundColor: AppColors.bg,
       body: Column(
         children: [
-          // ---------------- Dark map hero ----------------
+          // ---------------- Map hero ----------------
           Expanded(
             child: Stack(
               children: [
@@ -234,8 +235,13 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
                       },
                     ),
                     children: [
-                      const CartoTiles(dark: true), // dark_all allowed in dark heroes
-                      AnimatedDashPolyline(points: routePoints),
+                      // Light Voyager tiles — readable streets, matches the
+                      // rest of the app (dark_all read as near-black).
+                      const CartoTiles(),
+                      AnimatedDashPolyline(
+                        points: routePoints,
+                        color: AppColors.goldDark, // 3:1+ contrast on light tiles
+                      ),
                       MarkerLayer(markers: [
                         Marker(
                           point: _workerPos,
@@ -251,10 +257,14 @@ class _ActiveJobScreenState extends ConsumerState<ActiveJobScreen>
                           child: DestinationMarkerChild(
                             icon: Icons.home_rounded,
                             color: AppColors.indigo,
-                          ).animate().scale(
-                                begin: const Offset(0.2, 0.2),
-                                curve: Curves.elasticOut,
-                                duration: 650.ms,
+                          ).animate().fade(
+                                duration: 180.ms,
+                                curve: Curves.easeOut,
+                              ).scale(
+                                begin: const Offset(0.9, 0.9),
+                                end: const Offset(1, 1),
+                                curve: Curves.easeOutCubic,
+                                duration: 200.ms,
                               ),
                         ),
                       ]),

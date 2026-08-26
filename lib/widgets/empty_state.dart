@@ -25,24 +25,31 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ambient "breathing" loop is decorative — disabled under the OS
+    // remove-animations accessibility setting (motion tier policy).
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final iconCircle = Container(
+      width: 84,
+      height: 84,
+      decoration: BoxDecoration(
+        color: iconColor.withValues(alpha: 0.1),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 38, color: iconColor),
+    );
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 84,
-              height: 84,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child:
-                  Icon(icon, size: 38, color: iconColor),
-            )
-                .animate(onPlay: (c) => c.repeat(reverse: true))
-                .scaleXY(begin: 1, end: 1.05, duration: 1600.ms, curve: Curves.easeInOut),
+            if (reduceMotion)
+              iconCircle
+            else
+              iconCircle
+                  .animate(onPlay: (c) => c.repeat(reverse: true))
+                  .scaleXY(begin: 1, end: 1.05, duration: 1600.ms, curve: Curves.easeInOut),
             const SizedBox(height: 16),
             Text(
               title,

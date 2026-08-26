@@ -18,26 +18,38 @@ class CartoTiles extends StatelessWidget {
   Widget build(BuildContext context) {
     return TileLayer(
       urlTemplate: dark
-          ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png'
-          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+          ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
+          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
       subdomains: const ['a', 'b', 'c', 'd'],
       userAgentPackageName: 'app.sahakarya.worker',
-      maxZoom: 19,
+      // Serve @2x tiles on high-DPR screens and allow gentle over-zoom past
+      // the native pyramid so labels never turn to mush mid-pinch.
+      retinaMode: true,
+      maxNativeZoom: 19,
+      // Offline / flaky-network tolerance: show what we have, never crash.
+      errorTileCallback: (tile, error, trace) {},
     );
   }
 }
 
 /// Required attribution overlay for CARTO/OSM tiles.
+/// [dark] adapts the chip to dark hero maps (lower saturation, readable).
 class CartoAttribution extends StatelessWidget {
-  const CartoAttribution({super.key});
+  final bool dark;
+
+  const CartoAttribution({super.key, this.dark = false});
 
   @override
   Widget build(BuildContext context) {
     return SimpleAttributionWidget(
-      backgroundColor: Colors.white.withValues(alpha: 0.85),
+      backgroundColor:
+          dark ? Colors.black.withValues(alpha: 0.55) : Colors.white.withValues(alpha: 0.85),
       source: Text(
         '© OpenStreetMap contributors © CARTO',
-        style: TextStyle(fontSize: 9.5, color: Colors.grey.shade700),
+        style: TextStyle(
+          fontSize: 9.5,
+          color: dark ? Colors.white70 : Colors.grey.shade700,
+        ),
       ),
     );
   }

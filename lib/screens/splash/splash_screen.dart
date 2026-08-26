@@ -77,8 +77,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                     .animate(delay: 150.ms)
                     .scale(
                       begin: const Offset(0.4, 0.4),
-                      curve: Curves.elasticOut,
-                      duration: 900.ms,
+                      end: const Offset(1, 1),
+                      curve: Curves.easeOutCubic,
+                      duration: 400.ms,
                     )
                     .shimmer(
                       delay: 700.ms,
