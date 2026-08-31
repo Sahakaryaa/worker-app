@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/availability_provider.dart';
 import '../theme/app_colors.dart';
+import 'permission_dialog.dart';
 
 /// Large animated availability switch with online/offline color morph
 /// and pulsing live radar when online.
@@ -40,8 +41,12 @@ class _AvailabilityToggleState extends ConsumerState<AvailabilityToggle>
     final isOnline = ref.watch(availabilityProvider);
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         HapticFeedback.mediumImpact();
+        if (!isOnline) {
+          final granted = await WorkerLocationPermissionDialog.show(context);
+          if (!granted) return;
+        }
         ref.read(availabilityProvider.notifier).toggle();
       },
       child: AnimatedContainer(

@@ -11,6 +11,7 @@ import '../../utils/formatting.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_snack_bar.dart';
 import '../../widgets/cooperative_badge.dart';
+import '../../widgets/legal_policy_sheet.dart';
 
 /// Validated multi-step registration — POST /auth/register {name,phone,password}.
 /// No pre-filled identity; hint text only; Next disabled until step valid.
@@ -33,6 +34,7 @@ class _WorkerRegistrationScreenState
   final _federationCode = TextEditingController();
 
   bool _obscure = true;
+  bool _agreeToCharter = true;
   String? _phoneError;
 
   static const List<String> _availableSkills = [
@@ -65,6 +67,8 @@ class _WorkerRegistrationScreenState
         return _name.text.trim().length >= 2;
       case 2:
         return _selectedSkills.isNotEmpty;
+      case 3:
+        return _agreeToCharter;
       default:
         return true;
     }
@@ -395,13 +399,93 @@ class _WorkerRegistrationScreenState
           decoration:
               _deco(hint: 'e.g. DEL-NCCT-2024', icon: Icons.badge_rounded),
         ).animate().fadeIn(duration: 350.ms).slideY(begin: 0.12, end: 0),
-        const SizedBox(height: 20),
-        SoftInfoCard(
-          icon: Icons.workspace_premium_rounded,
-          title: 'Certification pending review',
-          body:
-              'The federation board verifies your trade certificate after signup. Status appears on your profile.',
-        ).animate(delay: 80.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0),
+        const SizedBox(height: 16),
+        // Partner Charter & Policy Agreement
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: _agreeToCharter,
+                activeColor: AppColors.goldDark,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                onChanged: (val) =>
+                    setState(() => _agreeToCharter = val ?? false),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Wrap(
+                children: [
+                  Text(
+                    'I agree to the ',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => WorkerLegalPolicySheet.show(context,
+                        doc: WorkerLegalDocType.welfareCharter),
+                    child: Text(
+                      '5% Welfare Fund Charter',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.goldDark,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    ', ',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => WorkerLegalPolicySheet.show(context,
+                        doc: WorkerLegalDocType.partnerPrivacy),
+                    child: Text(
+                      'Data Dignity Policy',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.goldDark,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    ' & ',
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      color: AppColors.inkSoft,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => WorkerLegalPolicySheet.show(context,
+                        doc: WorkerLegalDocType.partnerTerms),
+                    child: Text(
+                      'Partner Terms',
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.goldDark,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ).animate(delay: 120.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1, end: 0),
       ],
     );
   }

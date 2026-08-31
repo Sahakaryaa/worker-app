@@ -14,6 +14,7 @@ import '../../widgets/avatar_badge.dart';
 import '../../widgets/availability_toggle.dart';
 import '../../widgets/cooperative_badge.dart';
 import '../../widgets/status_chip.dart';
+import '../../widgets/legal_policy_sheet.dart';
 
 /// Profile — AvatarBadge header, certification StatusChip, editable
 /// availability and logout.
@@ -197,7 +198,35 @@ class WorkerProfileScreen extends ConsumerWidget {
               ),
             ).animate(delay: 100.ms).fadeIn(duration: 400.ms),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // Legal & Cooperative Policies
+          _policyTile(
+            context,
+            icon: Icons.volunteer_activism_rounded,
+            title: '5% Welfare Fund Charter',
+            subtitle: 'Non-extractable lock, emergency healthcare & tool aid',
+            onTap: () => WorkerLegalPolicySheet.show(context,
+                doc: WorkerLegalDocType.welfareCharter),
+          ),
+          _policyTile(
+            context,
+            icon: Icons.shield_rounded,
+            title: 'Data Dignity & Privacy Policy',
+            subtitle: 'Zero algorithmic bans, transparent GPS streaming',
+            onTap: () => WorkerLegalPolicySheet.show(context,
+                doc: WorkerLegalDocType.partnerPrivacy),
+          ),
+          _policyTile(
+            context,
+            icon: Icons.gavel_rounded,
+            title: 'Partner Terms & Fair Wage Guarantee',
+            subtitle: 'Direct 95% payouts & grievance arbitration',
+            onTap: () => WorkerLegalPolicySheet.show(context,
+                doc: WorkerLegalDocType.partnerTerms),
+          ),
+
+          const SizedBox(height: 16),
 
           // Actions
           OutlinedButton.icon(
@@ -280,4 +309,54 @@ class WorkerProfileScreen extends ConsumerWidget {
               style: GoogleFonts.inter(fontSize: 10.5, color: Colors.white54)),
         ],
       );
+
+  Widget _policyTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        onTap: onTap,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        tileColor: AppColors.surface,
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.gold.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppColors.goldDark, size: 20),
+        ),
+        title: Text(
+          title,
+          style: GoogleFonts.inter(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.ink,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: GoogleFonts.inter(
+            fontSize: 11.5,
+            color: AppColors.inkSoft,
+          ),
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: AppColors.inkFaint,
+          size: 22,
+        ),
+      ),
+    );
+  }
 }
