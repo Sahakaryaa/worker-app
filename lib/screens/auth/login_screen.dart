@@ -11,6 +11,7 @@ import '../../utils/formatting.dart';
 import '../../widgets/app_button.dart';
 import '../../widgets/app_snack_bar.dart';
 import '../../widgets/glass_card.dart';
+import '../../widgets/app_logo.dart';
 
 /// Login — gold gradient header + frosted glass form card with staggered
 /// fields. POST /auth/login {phone, password} -> TokenResponse.
@@ -86,15 +87,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.22),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(Icons.handyman_rounded,
-                                color: Colors.white, size: 24),
+                          const AppLogo(size: 46),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Sahakarya',
+                                style: GoogleFonts.sora(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                'SARATHI WORKER',
+                                style: GoogleFonts.inter(
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                  letterSpacing: 1.8,
+                                ),
+                              ),
+                            ],
                           ),
                           const Spacer(),
                           TextButton(

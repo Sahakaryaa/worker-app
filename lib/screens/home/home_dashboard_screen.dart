@@ -6,7 +6,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../models/job.dart';
 import '../../providers/active_job_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/availability_provider.dart';
@@ -19,7 +18,6 @@ import '../../widgets/availability_toggle.dart';
 import '../../widgets/cooperative_badge.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/glass_card.dart';
-import '../../widgets/dark_glass_card.dart';
 import '../../widgets/skeleton_box.dart';
 import '../../widgets/status_chip.dart';
 
@@ -52,12 +50,15 @@ class HomeDashboardScreen extends ConsumerWidget {
           slivers: [
             // ---------------- Dark hero header ----------------
             SliverToBoxAdapter(
-              child: DarkGlassCard(
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(28),
-                  bottomRight: Radius.circular(28),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: AppColors.nightGradient,
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
                 ),
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 22),
                 child: SafeArea(
                   bottom: false,
                   child: Column(
@@ -74,21 +75,20 @@ class HomeDashboardScreen extends ConsumerWidget {
                                 Text(
                                   'Namaste, ${_firstName(worker?.name)}',
                                   style: GoogleFonts.sora(
-                                    fontSize: 19,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.3,
                                     color: Colors.white,
+                                    letterSpacing: -0.3,
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 3),
+                                const SizedBox(height: 2),
                                 Text(
                                   _skillsLine(worker?.skills),
                                   style: GoogleFonts.inter(
-                                      fontSize: 12, color: Colors.white60),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                    fontSize: 12,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ],
                             ),
@@ -102,8 +102,8 @@ class HomeDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-              ),
-            ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.04, end: 0),
+              ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.04, end: 0),
+            ),
 
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -114,7 +114,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                     if (activeJob != null)
                       GlassCard(
                         padding: const EdgeInsets.all(16),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: 18,
                         child: GestureDetector(
                           onTap: () => context.go('/active-job'),
                           child: Row(
@@ -160,7 +160,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                     // ---------------- EARNINGS HERO CARD ----------------
                     GlassCard(
                       padding: const EdgeInsets.all(20),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: 20,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -170,7 +170,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(\"Today's take-home\",
+                                  Text("Today's take-home",
                                       style: GoogleFonts.inter(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
@@ -270,7 +270,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                           Expanded(
                             child: GlassCard(
                               padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: 16,
                               child: Material(
                                 color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(16),
@@ -304,7 +304,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                           Expanded(
                             child: GlassCard(
                               padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: 16,
                               child: Material(
                                 color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(16),
@@ -339,7 +339,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                           Expanded(
                             child: GlassCard(
                               padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: 16,
                               child: Material(
                                 color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(16),
@@ -478,7 +478,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                     final job = earnings.jobHistory[index];
                     return GlassCard(
                       padding: const EdgeInsets.all(14),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: 16,
                       child: Row(
                         children: [
                           Container(

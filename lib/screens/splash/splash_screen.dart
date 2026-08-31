@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/app_logo.dart';
 
 /// Dark gradient hero splash with gold logo reveal.
 class SplashScreen extends ConsumerStatefulWidget {
@@ -62,24 +63,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Gold logo mark reveal
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.goldGradient,
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: AppColors.glow(AppColors.gold, alpha: 0.45),
-                  ),
-                  child:
-                      const Icon(Icons.handyman_rounded, color: Colors.white, size: 44),
-                )
+                // Official Sahakarya Sarathi Logo reveal
+                const AppLogo(size: 110)
                     .animate(delay: 150.ms)
                     .scale(
                       begin: const Offset(0.4, 0.4),
                       end: const Offset(1, 1),
                       curve: Curves.easeOutCubic,
-                      duration: 400.ms,
+                      duration: 450.ms,
                     )
                     .shimmer(
                       delay: 700.ms,

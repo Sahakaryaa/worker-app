@@ -7,25 +7,32 @@ class AppColors {
   AppColors._();
 
   // Surfaces & backgrounds
-  static const Color bg = Color(0xFFF6F7FB);
+  static const Color bg = Color(0xFFF7FAF8);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceAlt = Color(0xFFEEF0F7);
+  static const Color surfaceAlt = Color(0xFFEDF2EE);
 
   // Ink
-  static const Color ink = Color(0xFF101828);
-  static const Color inkSoft = Color(0xFF667085);
-  static const Color inkFaint = Color(0xFF98A2B3);
-  static const Color border = Color(0xFFE4E7EF);
+  static const Color ink = Color(0xFF101F19);
+  static const Color inkSoft = Color(0xFF4E6158);
+  static const Color inkFaint = Color(0xFF82968D);
+  static const Color border = Color(0xFFDFE7E2);
 
-  // Primary — worker-app gold (earnings identity)
-  static const Color gold = Color(0xFFF59E0B);
-  static const Color goldLight = Color(0xFFFBBF24);
-  static const Color goldDark = Color(0xFFD97706);
+  // Primary brand — Sahakarya Forest Green
+  static const Color primary = Color(0xFF0D5238);
+  static const Color primaryDeep = Color(0xFF093F2B);
+  static const Color primaryLight = Color(0xFF137A54);
+  static const Color teal = primary;
 
-  // Informational accent — indigo (never default Material blue)
-  static const Color indigo = Color(0xFF5B5FE9);
-  static const Color indigoLight = Color(0xFF8E7CF0);
-  static const Color indigoDeep = Color(0xFF6A5AE0);
+  // Earnings & worker accent — Sahakarya Amber / Gold
+  static const Color gold = Color(0xFFF5A623);
+  static const Color goldLight = Color(0xFFF8B63B);
+  static const Color goldDark = Color(0xFFD98A12);
+  static const Color amber = gold;
+
+  // Accent / Informational — Green / Emerald
+  static const Color indigo = Color(0xFF0D5238);
+  static const Color indigoLight = Color(0xFF137A54);
+  static const Color indigoDeep = Color(0xFF093F2B);
 
   // Semantic feedback
   static const Color success = Color(0xFF16A34A);
@@ -34,26 +41,32 @@ class AppColors {
   static const Color info = Color(0xFF0EA5E9);
 
   // Dark hero surfaces
-  static const Color night1 = Color(0xFF0B1220);
-  static const Color night2 = Color(0xFF111A2C);
+  static const Color night1 = Color(0xFF091612);
+  static const Color night2 = Color(0xFF0E1F1A);
 
   // Gradients
   static const LinearGradient goldGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFFF59E0B), Color(0xFFFBBF24)],
+    colors: [Color(0xFFF5A623), Color(0xFFF8B63B)],
+  );
+
+  static const LinearGradient primaryGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF093F2B), Color(0xFF137A54)],
   );
 
   static const LinearGradient indigoGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF6A5AE0), Color(0xFF8E7CF0)],
+    colors: [Color(0xFF093F2B), Color(0xFF137A54)],
   );
 
   static const LinearGradient nightGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF0B1220), Color(0xFF111A2C)],
+    colors: [Color(0xFF091612), Color(0xFF0E1F1A)],
   );
 
   /// Soft shadow per spec: rgba(16,24,40,0.08), blur 24, offset (0,8).
